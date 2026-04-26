@@ -15,7 +15,8 @@
   "include": [
     "entrypoints/qwen-agent.ts",
     "services/api/qwen-provider.ts",
-    "utils/model/qwen-models.ts"
+    "utils/model/qwen-models.ts",
+    "agent/**/*.ts"
   ],
   "exclude": [
     "node_modules",
