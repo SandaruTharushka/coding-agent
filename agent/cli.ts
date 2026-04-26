@@ -1,23 +1,21 @@
 #!/usr/bin/env node
 import { Command } from 'commander'
+import { loadDotEnv } from '../src/config/qwenConfig.js'
+
+// Load .env before any command runs (shell env always takes priority)
+loadDotEnv('.env')
+
 import { initCommand } from './commands/init.js'
 import { scanCommand } from './commands/scan.js'
 import { planCommand } from './commands/plan.js'
 import { applyCommand } from './commands/apply.js'
 import { testCommand } from './commands/test.js'
 import { commitCommand } from './commands/commit.js'
-
-// Load .env if present
-import * as fs from 'fs'
-if (fs.existsSync('.env')) {
-  const lines = fs.readFileSync('.env', 'utf8').split('\n')
-  for (const line of lines) {
-    const m = line.match(/^\s*([A-Z_][A-Z0-9_]*)=(.*)$/)
-    if (m && !process.env[m[1]]) {
-      process.env[m[1]] = m[2].trim().replace(/^["']|["']$/g, '')
-    }
-  }
-}
+import {
+  configShowCommand,
+  configCheckCommand,
+  configSetKeyCommand,
+} from './commands/config.js'
 
 const program = new Command()
 
@@ -26,55 +24,68 @@ program
   .description('Production-grade CLI coding agent powered by Qwen LLM')
   .version('1.0.0')
 
+// ─── Core commands ────────────────────────────────────────────────────────────
+
 program
   .command('init')
   .description('Initialize project: scan structure, create .agent/ directory')
-  .action(async () => {
-    await initCommand()
-  })
+  .action(async () => { await initCommand() })
 
 program
   .command('scan')
   .description('Scan project files and update context in .agent/context.json')
   .option('-d, --depth <depth>', 'Max directory scan depth', '5')
-  .action(async (opts: { depth?: string }) => {
-    await scanCommand(opts)
-  })
+  .action(async (opts: { depth?: string }) => { await scanCommand(opts) })
 
 program
   .command('plan')
   .description('Use the architect agent to plan a coding task')
   .argument('<task>', 'Describe the task (e.g. "add input validation to login form")')
   .option('-m, --model <model>', 'Qwen model override (e.g. qwen-plus, qwen-max)')
-  .action(async (task: string, opts: { model?: string }) => {
-    await planCommand(task, opts)
-  })
+  .action(async (task: string, opts: { model?: string }) => { await planCommand(task, opts) })
 
 program
   .command('apply')
   .description('Execute the current plan with the coder agent')
   .option('--dry-run', 'Preview diffs without making changes')
-  .action(async (opts: { dryRun?: boolean }) => {
-    await applyCommand(opts)
-  })
+  .action(async (opts: { dryRun?: boolean }) => { await applyCommand(opts) })
 
 program
   .command('test')
   .description('Run build and test suite, optionally auto-fix errors via LLM')
   .option('--fix', 'Auto-fix errors with LLM (up to 3 retries)')
-  .action(async (opts: { fix?: boolean }) => {
-    await testCommand(opts)
-  })
+  .action(async (opts: { fix?: boolean }) => { await testCommand(opts) })
 
 program
   .command('commit')
   .description('Stage all changes and commit (auto-generates message if omitted)')
   .argument('[message]', 'Commit message')
-  .action(async (message?: string) => {
-    await commitCommand(message)
-  })
+  .action(async (message?: string) => { await commitCommand(message) })
 
-// Default: show help if no command given
+// ─── Config command group ─────────────────────────────────────────────────────
+
+const configCmd = program
+  .command('config')
+  .description('Manage Qwen configuration')
+
+configCmd
+  .command('show')
+  .description('Display current configuration (API key masked)')
+  .action(() => { configShowCommand() })
+
+configCmd
+  .command('check')
+  .description('Validate required configuration and report issues')
+  .action(() => { configCheckCommand() })
+
+configCmd
+  .command('set-key')
+  .description('Save Qwen API key to .env file')
+  .argument('[key]', 'API key (prompted if omitted)')
+  .action(async (key?: string) => { await configSetKeyCommand(key) })
+
+// ─── Entry ────────────────────────────────────────────────────────────────────
+
 if (process.argv.length <= 2) {
   program.help()
 }

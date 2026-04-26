@@ -1,16 +1,11 @@
 /**
- * Qwen OpenAI-compatible provider for Claude Code.
+ * Qwen OpenAI-compatible API provider.
  *
- * Env vars:
- *   QWEN_API_KEY    — required
- *   QWEN_BASE_URL   — optional, defaults to DashScope international endpoint
- *   QWEN_MODEL      — optional, defaults to qwen-plus
- *   QWEN_STREAM     — set to "false" to disable streaming
- *   QWEN_MAX_TOKENS — optional, max output tokens (default 4096)
- *   QWEN_TIMEOUT_MS — optional, request timeout ms (default 120000)
+ * All configuration is obtained from the centralized config loader.
+ * Do not read QWEN_* env vars directly in this file.
  */
 
-import { getQwenApiKey, getQwenBaseUrl, getQwenModel } from '../../utils/model/qwen-models.js'
+import { loadQwenConfig } from '../../src/config/qwenConfig.js'
 
 export interface QwenMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
@@ -95,47 +90,53 @@ export interface QwenCompletionOptions {
   temperature?: number
 }
 
-const DEFAULT_MAX_TOKENS = 4096
-const DEFAULT_TIMEOUT_MS = 120_000
-const MAX_RETRIES = 3
-
 async function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function isRetryableStatus(status: number): boolean {
+  return status === 429 || (status >= 500 && status <= 599)
+}
+
+function friendlyHttpError(status: number, body: string): Error {
+  if (status === 401 || status === 403) {
+    return new Error(
+      `Qwen API authentication failed (${status}). Check your QWEN_API_KEY.\nDetail: ${body}`,
+    )
+  }
+  if (status === 429) {
+    return new Error(`Qwen API rate limit exceeded (429). Will retry with backoff.\nDetail: ${body}`)
+  }
+  return new Error(`Qwen API error ${status}: ${body}`)
 }
 
 export async function qwenChatCompletion(
   options: QwenCompletionOptions,
 ): Promise<QwenResponse> {
-  const apiKey = getQwenApiKey()
-  const baseUrl = getQwenBaseUrl()
-  const model = getQwenModel()
-  const timeoutMs = parseInt(process.env.QWEN_TIMEOUT_MS ?? String(DEFAULT_TIMEOUT_MS), 10)
-  const maxTokens = parseInt(process.env.QWEN_MAX_TOKENS ?? String(DEFAULT_MAX_TOKENS), 10)
+  const cfg = loadQwenConfig()
+  if (!cfg.apiKey) throw new Error('QWEN_API_KEY is not set. Run `agent config check` for details.')
 
   const body = JSON.stringify({
-    model,
+    model: cfg.model,
     messages: options.messages,
     ...(options.tools && options.tools.length > 0 ? { tools: options.tools } : {}),
     ...(options.tool_choice ? { tool_choice: options.tool_choice } : {}),
     stream: false,
-    max_tokens: options.max_tokens ?? maxTokens,
+    max_tokens: options.max_tokens ?? cfg.maxTokens,
     ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
   })
 
   let lastError: Error | null = null
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+  for (let attempt = 0; attempt <= cfg.maxRetries; attempt++) {
     if (attempt > 0) {
       await sleep(Math.pow(2, attempt) * 1000)
     }
     try {
       const controller = new AbortController()
-      const timer = setTimeout(() => controller.abort(), timeoutMs)
-      const res = await fetch(`${baseUrl}/chat/completions`, {
+      const timer = setTimeout(() => controller.abort(), cfg.timeoutMs)
+      const res = await fetch(`${cfg.baseUrl}/chat/completions`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.apiKey}` },
         body,
         signal: controller.signal,
       })
@@ -143,15 +144,21 @@ export async function qwenChatCompletion(
 
       if (!res.ok) {
         const errText = await res.text().catch(() => res.statusText)
-        throw new Error(`Qwen API error ${res.status}: ${errText}`)
+        const err = friendlyHttpError(res.status, errText)
+        // Auth failures are not retryable
+        if (!isRetryableStatus(res.status)) throw err
+        lastError = err
+        continue
       }
 
       return (await res.json()) as QwenResponse
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err))
       if (lastError.name === 'AbortError') {
-        throw new Error(`Qwen API timed out after ${timeoutMs}ms`)
+        throw new Error(`Qwen API timed out after ${cfg.timeoutMs}ms`)
       }
+      // Re-throw non-retryable errors immediately
+      if (lastError.message.includes('authentication failed')) throw lastError
     }
   }
   throw lastError ?? new Error('Qwen API request failed after retries')
@@ -160,47 +167,41 @@ export async function qwenChatCompletion(
 export async function* qwenChatCompletionStream(
   options: QwenCompletionOptions,
 ): AsyncGenerator<QwenStreamChunk> {
-  const apiKey = getQwenApiKey()
-  const baseUrl = getQwenBaseUrl()
-  const model = getQwenModel()
-  const timeoutMs = parseInt(process.env.QWEN_TIMEOUT_MS ?? String(DEFAULT_TIMEOUT_MS), 10)
-  const maxTokens = parseInt(process.env.QWEN_MAX_TOKENS ?? String(DEFAULT_MAX_TOKENS), 10)
+  const cfg = loadQwenConfig()
+  if (!cfg.apiKey) throw new Error('QWEN_API_KEY is not set. Run `agent config check` for details.')
 
   const body = JSON.stringify({
-    model,
+    model: cfg.model,
     messages: options.messages,
     ...(options.tools && options.tools.length > 0 ? { tools: options.tools } : {}),
     ...(options.tool_choice ? { tool_choice: options.tool_choice } : {}),
     stream: true,
-    max_tokens: options.max_tokens ?? maxTokens,
+    max_tokens: options.max_tokens ?? cfg.maxTokens,
     ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
   })
 
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  const timer = setTimeout(() => controller.abort(), cfg.timeoutMs)
 
   let res: Response
   try {
-    res = await fetch(`${baseUrl}/chat/completions`, {
+    res = await fetch(`${cfg.baseUrl}/chat/completions`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.apiKey}` },
       body,
       signal: controller.signal,
     })
   } catch (err) {
     clearTimeout(timer)
     const e = err instanceof Error ? err : new Error(String(err))
-    if (e.name === 'AbortError') throw new Error(`Qwen API timed out after ${timeoutMs}ms`)
+    if (e.name === 'AbortError') throw new Error(`Qwen API timed out after ${cfg.timeoutMs}ms`)
     throw e
   }
 
   if (!res.ok) {
     clearTimeout(timer)
     const errText = await res.text().catch(() => res.statusText)
-    throw new Error(`Qwen API error ${res.status}: ${errText}`)
+    throw friendlyHttpError(res.status, errText)
   }
 
   const reader = res.body?.getReader()
