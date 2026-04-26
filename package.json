@@ -1,0 +1,19 @@
+{
+  "name": "qwen-coding-agent",
+  "version": "1.0.0",
+  "description": "Claude Code-like local CLI coding assistant using Qwen API",
+  "type": "module",
+  "bin": {
+    "qwen-agent": "./dist/entrypoints/qwen-agent.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.qwen.json",
+    "start": "node dist/entrypoints/qwen-agent.js",
+    "dev": "node --loader ts-node/esm src/entrypoints/qwen-agent.ts",
+    "lint": "tsc -p tsconfig.qwen.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.17",
+    "typescript": "^5.9.3"
+  }
+}
