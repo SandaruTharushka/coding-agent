@@ -15,6 +15,10 @@ import {
   addDecision,
 } from '../../agent/memory/store.js'
 import { banner, info, success, error, warn, section } from '../../agent/output/formatter.js'
+import { backupFiles } from '../patch/backupManager.js'
+import { generateDiffSummary } from '../patch/diffPreview.js'
+import { createSession, saveSession } from '../patch/editSession.js'
+import { rollbackSession } from '../patch/rollbackManager.js'
 import type { AgentResult, AgentPlan } from './types.js'
 import type { Plan } from '../../agent/types.js'
 import type { ScanResult } from '../../src/context/projectScanner.js'
@@ -93,6 +97,8 @@ export class CoordinatorAgent extends BaseAgent {
   /**
    * Phase 2–4: Coder → Tester (with retry) → Reviewer → finalize.
    * Coder receives only relevant selected files. Reviewer receives changed files + related.
+   * A Safe Edit session is created before the Coder runs; all planned files are backed up
+   * first so any failure can be rolled back via `qwen-agent rollback`.
    */
   async apply(dryRun = false): Promise<AgentResult> {
     const storedPlan = readPlan() as AgentPlan | null
@@ -102,7 +108,17 @@ export class CoordinatorAgent extends BaseAgent {
 
     if (dryRun) {
       info('Dry run — no changes applied')
-      return this.ok('Dry run completed', storedPlan, ['run apply without --dry-run to execute'])
+      const diffs = generateDiffSummary(
+        storedPlan.filesToChange.map(f => ({
+          path: f.path,
+          content: f.content,
+          action: f.action,
+        })),
+      )
+      info(`Planned: ${diffs.totalFiles} file(s)  +${diffs.totalAdded}  -${diffs.totalRemoved}`)
+      return this.ok('Dry run completed', { plan: storedPlan, diffSummary: diffs }, [
+        'run apply without --dry-run to execute',
+      ])
     }
 
     const { scan, index } = await getProjectContext()
@@ -110,6 +126,17 @@ export class CoordinatorAgent extends BaseAgent {
     info(`Coder context: ${ctx.filesIncluded.length} files, ~${ctx.totalTokens} tokens`)
 
     updateTaskStatus(storedPlan.task, 'in_progress')
+
+    // ── Safe Edit: create session + backup planned files ──────────────────────
+    const session = createSession(storedPlan.task)
+    const plannedPaths = storedPlan.filesToChange
+      .filter(f => f.action !== 'create')
+      .map(f => f.path)
+    const backupRecords = backupFiles(session.id, plannedPaths)
+    session.backups = backupRecords
+    session.status = 'previewed'
+    saveSession(session)
+    info(`Edit session ${session.id.slice(0, 8)} — ${backupRecords.length} file(s) backed up`)
 
     // ── Phase 2 + 3: Coder → Tester with up to MAX_RETRIES ──────────────────
     let testerPassed = false
@@ -130,6 +157,8 @@ export class CoordinatorAgent extends BaseAgent {
       })
 
       if (!coderResult.success) {
+        session.status = 'failed'
+        saveSession(session)
         updateTaskStatus(storedPlan.task, 'failed', coderResult.errors?.join('; '))
         return this.fail('Coder failed to apply changes', coderResult.errors)
       }
@@ -140,7 +169,10 @@ export class CoordinatorAgent extends BaseAgent {
       const freshScan = await scanProjectFiles()
       const freshIndex = buildIndex(freshScan)
       writeCache(freshScan, freshIndex)
-      const freshCtx = buildLLMContext(freshScan, freshIndex, { task: storedPlan.task, maxFiles: 20 })
+      const freshCtx = buildLLMContext(freshScan, freshIndex, {
+        task: storedPlan.task,
+        maxFiles: 20,
+      })
 
       const testerResult = await this.tester.run({
         task: storedPlan.task,
@@ -159,12 +191,18 @@ export class CoordinatorAgent extends BaseAgent {
         warn(`Tests failed (attempt ${attempt}/${MAX_RETRIES}) — retrying coder with error logs`)
         lastTesterErrors.forEach(e => warn(`  • ${e}`))
       } else {
-        error(`Tests failed after ${MAX_RETRIES} attempt(s) — stopping`)
+        error(`Tests failed after ${MAX_RETRIES} attempt(s) — rolling back`)
+        const rb = await rollbackSession(session.id)
+        if (rb.success) {
+          warn(`Rolled back session ${session.id.slice(0, 8)} (${rb.restoredFiles.length} file(s) restored)`)
+        } else {
+          warn(`Auto-rollback failed — run: qwen-agent rollback ${session.id}`)
+        }
         updateTaskStatus(storedPlan.task, 'failed', lastTesterErrors.join('; '))
         return this.fail(
-          `Tests failed after ${MAX_RETRIES} attempt(s)`,
+          `Tests failed after ${MAX_RETRIES} attempt(s) — changes rolled back`,
           lastTesterErrors,
-          ['inspect errors and fix manually, then run `qwen-agent test`'],
+          ['inspect errors and fix manually, then run `qwen-agent apply`'],
         )
       }
     }
@@ -181,7 +219,9 @@ export class CoordinatorAgent extends BaseAgent {
     writeCache(reviewScan, reviewIndex)
 
     const changedFilePaths = storedPlan.filesToChange.map(f => f.path)
-    const reviewCtx = buildReviewContext(changedFilePaths, reviewScan, reviewIndex, { maxFiles: 20 })
+    const reviewCtx = buildReviewContext(changedFilePaths, reviewScan, reviewIndex, {
+      maxFiles: 20,
+    })
     info(`Review context: ${reviewCtx.filesIncluded.length} files, ~${reviewCtx.totalTokens} tokens`)
 
     const reviewResult = await this.reviewer.run({
@@ -193,8 +233,15 @@ export class CoordinatorAgent extends BaseAgent {
     if (!reviewResult.success) {
       error('Reviewer rejected the implementation:')
       reviewResult.errors?.forEach(i => warn(`  • ${i}`))
+      // Roll back on reviewer rejection too
+      const rb = await rollbackSession(session.id)
+      if (rb.success) {
+        warn(`Rolled back session ${session.id.slice(0, 8)} (${rb.restoredFiles.length} file(s) restored)`)
+      } else {
+        warn(`Auto-rollback failed — run: qwen-agent rollback ${session.id}`)
+      }
       updateTaskStatus(storedPlan.task, 'failed', reviewResult.errors?.join('; '))
-      return this.fail('Reviewer rejected implementation', reviewResult.errors, [
+      return this.fail('Reviewer rejected implementation — changes rolled back', reviewResult.errors, [
         'address issues and run apply again',
       ])
     }
@@ -212,12 +259,32 @@ export class CoordinatorAgent extends BaseAgent {
     writePlan(storedPlan as Plan)
     updateTaskStatus(storedPlan.task, 'completed')
 
+    // Record applied files and diffs in the session
+    session.changedFiles = appliedFiles
+    session.diffs = generateDiffSummary(
+      storedPlan.filesToChange.map(f => ({
+        path: f.path,
+        content: f.content,
+        action: f.action,
+      })),
+    ).records
+    session.status = 'applied'
+    saveSession(session)
+
     success(`Applied changes to ${appliedFiles.length} file(s)`)
+    info(`Edit session: ${session.id}`)
+    info(`Backup     : .qwen-agent/backups/${session.id}/`)
+    info(`Rollback   : qwen-agent rollback ${session.id}`)
 
     return this.ok(
       `Successfully applied changes to ${appliedFiles.length} file(s)`,
-      { appliedFiles, plan: storedPlan },
-      ['run `qwen-agent test` to verify', 'run `agent commit` to commit changes'],
+      { appliedFiles, plan: storedPlan, sessionId: session.id },
+      [
+        'run `qwen-agent test` to verify',
+        'run `qwen-agent diff` to review changes',
+        'run `qwen-agent rollback` to undo',
+        'run `agent commit` to commit changes',
+      ],
     )
   }
 
