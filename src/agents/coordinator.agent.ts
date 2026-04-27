@@ -3,6 +3,9 @@ import { ArchitectAgent } from './architect.agent.js'
 import { CoderAgent } from './coder.agent.js'
 import { TesterAgent } from './tester.agent.js'
 import { ReviewerAgent } from './reviewer.agent.js'
+import { runVerification } from '../verification/verificationRunner.js'
+import { summarizeForLLM } from '../verification/errorAnalyzer.js'
+import { saveVerificationLogs } from '../verification/logger.js'
 import { scanProjectFiles } from '../../src/context/projectScanner.js'
 import { buildIndex } from '../../src/context/fileIndex.js'
 import { buildLLMContext, buildReviewContext } from '../../src/context/contextBuilder.js'
@@ -290,9 +293,24 @@ export class CoordinatorAgent extends BaseAgent {
 
   /**
    * Run verification only (no coder — just tester).
+   * Uses deterministic runner first; escalates to LLM tester only on failure.
    */
   async test(): Promise<AgentResult> {
     banner('VERIFICATION')
+
+    const runResult = await runVerification({ runBuild: true, runLint: true, runTest: true })
+    saveVerificationLogs(runResult, 1)
+
+    if (runResult.success) {
+      return this.ok('All checks passed', { success: true, errors: [], attempts: 1 }, [
+        'ready to commit',
+      ])
+    }
+
+    // Escalate to LLM-powered tester with structured error context
+    const errorSummary = summarizeForLLM(runResult.checks)
+    info('Checks failed — running LLM tester for analysis')
+    warn(errorSummary.slice(0, 800))
 
     const { scan, index } = await getProjectContext()
     const ctx = buildLLMContext(scan, index, { task: 'verify build and tests', maxFiles: 15 })
@@ -300,7 +318,7 @@ export class CoordinatorAgent extends BaseAgent {
     return this.tester.run({
       task: 'verify build and tests',
       changedFiles: [],
-      context: ctx.text,
+      context: `${ctx.text}\n\nVerification errors to analyze:\n${errorSummary}`,
     })
   }
 

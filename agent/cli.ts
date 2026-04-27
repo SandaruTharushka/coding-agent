@@ -22,6 +22,7 @@ import {
   configSetKeyCommand,
 } from './commands/config.js'
 import { shellRunCommand, shellExplainCommand } from './commands/shell.js'
+import { verifyCommand } from './commands/verify.js'
 
 const program = new Command()
 
@@ -70,7 +71,8 @@ program
   .argument('[task]', 'Optional task — if provided, creates a plan then applies it immediately')
   .option('-m, --model <model>', 'Qwen model override (e.g. qwen-plus, qwen-max)')
   .option('--dry-run', 'Preview plan without making changes')
-  .action(async (task: string | undefined, opts: { model?: string; dryRun?: boolean }) => {
+  .option('--verify', 'Run build/lint verification after apply completes')
+  .action(async (task: string | undefined, opts: { model?: string; dryRun?: boolean; verify?: boolean }) => {
     if (task) {
       await applyTaskCommand(task, opts)
     } else {
@@ -116,6 +118,19 @@ program
   .option('--json', 'Output as JSON')
   .option('--limit <n>', 'Maximum sessions to display (default: 20)')
   .action((opts: { json?: boolean; limit?: string }) => { editSessionsCommand(opts) })
+
+// ─── Verify command ───────────────────────────────────────────────────────────
+
+program
+  .command('verify')
+  .description('Run build/lint/test checks and report structured results')
+  .option('--build', 'Run only the build check')
+  .option('--lint', 'Run only the lint check')
+  .option('--test', 'Run only the test check')
+  .option('--retry', 'Re-run failed checks up to 3× before reporting failure')
+  .action(async (opts: { build?: boolean; lint?: boolean; test?: boolean; retry?: boolean }) => {
+    await verifyCommand(opts)
+  })
 
 // ─── Shell safety command ─────────────────────────────────────────────────────
 
