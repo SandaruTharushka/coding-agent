@@ -11,8 +11,10 @@ import {
   updateTaskStatus,
   addDecision,
 } from '../memory/store.js'
-import { banner, section, success, error, warn, info } from '../output/formatter.js'
+import { banner, section, success, error, warn, info, fmt } from '../output/formatter.js'
 import type { Plan } from '../types.js'
+import { isGitRepo, getChangedFiles, getDiffSummary } from '../../src/git/gitService.js'
+import { generateCommitMessage } from '../../src/git/commitMessageGenerator.js'
 
 export interface CoordinatorResult {
   plan?: Plan
@@ -104,5 +106,40 @@ export async function coordinateApply(dryRun = false): Promise<CoordinatorResult
   updateTaskStatus(plan.task, 'completed')
 
   success(`Applied changes to ${appliedFiles.length} file(s)`)
+
+  // Show git workflow suggestions after successful apply
+  if (isGitRepo()) {
+    const changedFiles = getChangedFiles()
+    if (changedFiles.length > 0) {
+      section('Git Workflow')
+      info(`${changedFiles.length} file(s) changed. Suggested next steps:`)
+      console.log()
+
+      for (const f of changedFiles.slice(0, 10)) {
+        const label = f.status.padEnd(10)
+        console.log(`  ${fmt.dim(label)} ${f.path}`)
+      }
+      if (changedFiles.length > 10) {
+        console.log(`  ${fmt.dim(`...and ${changedFiles.length - 10} more`)}`)
+      }
+      console.log()
+
+      try {
+        const diffSummary = getDiffSummary()
+        const msgResult = await generateCommitMessage(changedFiles, diffSummary, plan.task)
+        console.log(`${fmt.bold('Suggested commit message:')}`)
+        console.log(`  ${fmt.cyan(msgResult.subject)}`)
+        console.log()
+      } catch { /* skip if LLM unavailable */ }
+
+      info('Run verification first:')
+      console.log(`  ${fmt.bold('qwen-agent verify')}`)
+      console.log()
+      info('Then commit and push:')
+      console.log(`  ${fmt.bold('qwen-agent git commit')}`)
+      console.log(`  ${fmt.bold('qwen-agent git push')}`)
+    }
+  }
+
   return { plan, success: true, appliedFiles, errors: [] }
 }

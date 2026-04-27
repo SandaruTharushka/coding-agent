@@ -23,6 +23,13 @@ import {
 } from './commands/config.js'
 import { shellRunCommand, shellExplainCommand } from './commands/shell.js'
 import { verifyCommand } from './commands/verify.js'
+import {
+  gitStatusCommand,
+  gitDiffCommand,
+  gitSummaryCommand,
+  gitCommitCommand,
+  gitPushCommand,
+} from './commands/gitWorkflow.js'
 
 const program = new Command()
 
@@ -118,6 +125,53 @@ program
   .option('--json', 'Output as JSON')
   .option('--limit <n>', 'Maximum sessions to display (default: 20)')
   .action((opts: { json?: boolean; limit?: string }) => { editSessionsCommand(opts) })
+
+// ─── Git command group ────────────────────────────────────────────────────────
+
+const gitCmd = program
+  .command('git')
+  .description('Git workflow helpers (status, diff, summary, commit, push)')
+
+gitCmd
+  .command('status')
+  .description('Show current branch and changed files')
+  .action(async () => { await gitStatusCommand() })
+
+gitCmd
+  .command('diff')
+  .description('Show a safe, masked diff summary of staged and unstaged changes')
+  .action(async () => { await gitDiffCommand() })
+
+gitCmd
+  .command('summary')
+  .description('Show changed files grouped by status (added/modified/deleted/renamed/untracked)')
+  .action(async () => { await gitSummaryCommand() })
+
+gitCmd
+  .command('commit')
+  .description('Stage all changes and commit (generates message via LLM if -m is omitted)')
+  .option('-m, --message <msg>', 'Commit message (skips LLM generation)')
+  .action(async (opts: { message?: string }) => { await gitCommitCommand(opts.message) })
+
+gitCmd
+  .command('push')
+  .description('Push current branch to remote (requires explicit approval)')
+  .option('-r, --remote <remote>', 'Remote name', 'origin')
+  .option('-b, --branch <branch>', 'Branch to push (defaults to current branch)')
+  .action(async (opts: { remote?: string; branch?: string }) => {
+    await gitPushCommand(opts.remote, opts.branch)
+  })
+
+// ─── Push alias ───────────────────────────────────────────────────────────────
+
+program
+  .command('push')
+  .description('Alias for `git push` — push current branch to remote (requires approval)')
+  .option('-r, --remote <remote>', 'Remote name', 'origin')
+  .option('-b, --branch <branch>', 'Branch to push (defaults to current branch)')
+  .action(async (opts: { remote?: string; branch?: string }) => {
+    await gitPushCommand(opts.remote, opts.branch)
+  })
 
 // ─── Verify command ───────────────────────────────────────────────────────────
 
