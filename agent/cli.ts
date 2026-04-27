@@ -13,6 +13,9 @@ import { applyCommand, applyTaskCommand } from './commands/apply.js'
 import { testCommand } from './commands/test.js'
 import { commitCommand } from './commands/commit.js'
 import { reviewCommand } from './commands/review.js'
+import { diffCommand } from './commands/diff.js'
+import { rollbackCommand } from './commands/rollback.js'
+import { editSessionsCommand } from './commands/editSessions.js'
 import {
   configShowCommand,
   configCheckCommand,
@@ -90,6 +93,28 @@ program
   .description('Stage all changes and commit (auto-generates message if omitted)')
   .argument('[message]', 'Commit message')
   .action(async (message?: string) => { await commitCommand(message) })
+
+program
+  .command('diff')
+  .description('Show diff preview of the latest (or specified) edit session')
+  .option('--session <id>', 'Session ID to inspect')
+  .option('--json', 'Output full session as JSON')
+  .action(async (opts: { session?: string; json?: boolean }) => {
+    await diffCommand({ json: opts.json, sessionId: opts.session })
+  })
+
+program
+  .command('rollback')
+  .description('Roll back the latest applied session, or a specific session by ID')
+  .argument('[session-id]', 'Session ID to roll back (defaults to latest applied)')
+  .action(async (sessionId?: string) => { await rollbackCommand(sessionId) })
+
+program
+  .command('edit-sessions')
+  .description('List all edit sessions with status, changed files and backup locations')
+  .option('--json', 'Output as JSON')
+  .option('--limit <n>', 'Maximum sessions to display (default: 20)')
+  .action((opts: { json?: boolean; limit?: string }) => { editSessionsCommand(opts) })
 
 // ─── Config command group ─────────────────────────────────────────────────────
 
