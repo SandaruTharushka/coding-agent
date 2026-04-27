@@ -30,6 +30,14 @@ import {
   gitCommitCommand,
   gitPushCommand,
 } from './commands/gitWorkflow.js'
+import {
+  memoryTasksCommand,
+  memoryDecisionsCommand,
+  memoryNotesCommand,
+  memorySearchCommand,
+  memoryAddNoteCommand,
+  memoryClearCommand,
+} from './commands/memory.js'
 
 const program = new Command()
 
@@ -222,6 +230,55 @@ configCmd
   .description('Save Qwen API key to .env file')
   .argument('[key]', 'API key (prompted if omitted)')
   .action(async (key?: string) => { await configSetKeyCommand(key) })
+
+// ─── Memory command group ─────────────────────────────────────────────────────
+
+const memoryCmd = program
+  .command('memory')
+  .description('View and manage task history, decisions, and project notes')
+
+memoryCmd
+  .command('tasks')
+  .description('List recent task records')
+  .option('--json', 'Output as JSON')
+  .option('--limit <n>', 'Maximum records to show (default: 20)')
+  .action((opts: { json?: boolean; limit?: string }) => { memoryTasksCommand(opts) })
+
+memoryCmd
+  .command('decisions')
+  .description('List recent agent decisions')
+  .option('--json', 'Output as JSON')
+  .option('--limit <n>', 'Maximum records to show (default: 20)')
+  .action((opts: { json?: boolean; limit?: string }) => { memoryDecisionsCommand(opts) })
+
+memoryCmd
+  .command('notes')
+  .description('List all project notes')
+  .option('--json', 'Output as JSON')
+  .action((opts: { json?: boolean }) => { memoryNotesCommand(opts) })
+
+memoryCmd
+  .command('search')
+  .description('Search across all memory records')
+  .argument('<query>', 'Search text')
+  .option('--json', 'Output as JSON')
+  .action((query: string, opts: { json?: boolean }) => { memorySearchCommand(query, opts) })
+
+memoryCmd
+  .command('add-note')
+  .description('Save a project note')
+  .argument('<title>', 'Note title')
+  .argument('<content>', 'Note content')
+  .option('--tags <tags>', 'Comma-separated tags')
+  .action((title: string, content: string, opts: { tags?: string }) => {
+    memoryAddNoteCommand(title, content, opts)
+  })
+
+memoryCmd
+  .command('clear')
+  .description('Delete all memory records (irreversible)')
+  .option('--confirm', 'Required to actually clear')
+  .action((opts: { confirm?: boolean }) => { memoryClearCommand(opts) })
 
 // ─── Entry ────────────────────────────────────────────────────────────────────
 
