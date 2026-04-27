@@ -7,6 +7,7 @@ loadDotEnv('.env')
 
 import { initCommand } from './commands/init.js'
 import { scanCommand } from './commands/scan.js'
+import { contextCommand } from './commands/context.js'
 import { planCommand } from './commands/plan.js'
 import { applyCommand, applyTaskCommand } from './commands/apply.js'
 import { testCommand } from './commands/test.js'
@@ -35,8 +36,22 @@ program
 program
   .command('scan')
   .description('Scan project files and update context in .agent/context.json')
-  .option('-d, --depth <depth>', 'Max directory scan depth', '5')
-  .action(async (opts: { depth?: string }) => { await scanCommand(opts) })
+  .option('-d, --depth <depth>', 'Max directory scan depth', '8')
+  .option('--refresh', 'Force refresh even if cache is current')
+  .action(async (opts: { depth?: string; refresh?: boolean }) => { await scanCommand(opts) })
+
+program
+  .command('context')
+  .description('Show context selected for a task (scores, token budget, ranked files)')
+  .argument('<task>', 'Task description to select context for')
+  .option('--json', 'Output as JSON including full context text')
+  .option('--refresh', 'Force re-scan even if cache is current')
+  .option('--max-files <n>', 'Maximum files to include in context (default: 30)')
+  .option('--max-tokens <n>', 'Token budget (default: 40000)')
+  .action(async (
+    task: string,
+    opts: { json?: boolean; refresh?: boolean; maxFiles?: string; maxTokens?: string },
+  ) => { await contextCommand(task, opts) })
 
 program
   .command('plan')
