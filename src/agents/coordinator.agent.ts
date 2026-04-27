@@ -3,8 +3,11 @@ import { ArchitectAgent } from './architect.agent.js'
 import { CoderAgent } from './coder.agent.js'
 import { TesterAgent } from './tester.agent.js'
 import { ReviewerAgent } from './reviewer.agent.js'
-import { scanProject } from '../../agent/scanner/project.js'
-import { buildContext, formatContextForLLM } from '../../agent/context/engine.js'
+import { scanProject } from '../context/projectScanner.js'
+import { buildFileIndex } from '../context/fileIndex.js'
+import { selectRelevantFiles, getRelatedFiles } from '../context/relevanceSelector.js'
+import { buildContext, formatContextForLLM } from '../context/contextBuilder.js'
+import { readCache, writeCache, isCacheValid, invalidateCache } from '../context/cache.js'
 import {
   writePlan,
   readPlan,
@@ -18,6 +21,85 @@ import type { Plan } from '../../agent/types.js'
 
 const MAX_RETRIES = 3
 
+// ─── Context engine helpers ───────────────────────────────────────────────────
+
+interface ContextEngineResult {
+  ctxText: string
+  totalFiles: number
+  selectedFiles: number
+}
+
+async function buildArchitectContext(task: string): Promise<ContextEngineResult> {
+  const scan = await scanProject()
+
+  const cache = readCache()
+  if (!cache || !isCacheValid(cache, scan.files)) {
+    writeCache(scan.files)
+  }
+
+  const index = buildFileIndex(scan.files)
+  // Architect needs a broad view: project summary + all ranked files
+  const ranked = selectRelevantFiles(task, index, { maxFiles: 40, includeConfigs: true })
+  const ctx = buildContext(scan, ranked, { maxTokens: 40_000, reserveTokens: 8_000 })
+
+  return { ctxText: formatContextForLLM(ctx), totalFiles: scan.totalFiles, selectedFiles: ctx.selectedFileCount }
+}
+
+async function buildCoderContext(task: string, extraErrors?: string): Promise<ContextEngineResult> {
+  const scan = await scanProject()
+  const index = buildFileIndex(scan.files)
+  // Coder needs precise, directly relevant files only
+  const ranked = selectRelevantFiles(task, index, { maxFiles: 20, includeConfigs: false })
+  const ctx = buildContext(scan, ranked, { maxTokens: 36_000, reserveTokens: 6_000 })
+
+  let ctxText = formatContextForLLM(ctx)
+  if (extraErrors) ctxText += `\n\n## Errors to Fix\n${extraErrors}`
+
+  return { ctxText, totalFiles: scan.totalFiles, selectedFiles: ctx.selectedFileCount }
+}
+
+async function buildReviewerContext(
+  task: string,
+  changedPaths: string[],
+): Promise<ContextEngineResult> {
+  const scan = await scanProject()
+  const index = buildFileIndex(scan.files)
+
+  // Reviewer sees changed files + files related to those changes
+  const changedRelative = changedPaths.map(p => {
+    const rec = [...index.records.values()].find(r => r.path === p || r.relativePath === p)
+    return rec?.relativePath ?? p
+  })
+
+  const relatedSet = new Set<string>()
+  for (const rel of changedRelative) {
+    for (const related of getRelatedFiles(rel, index, 5)) {
+      relatedSet.add(related.relativePath)
+    }
+  }
+
+  const ranked = selectRelevantFiles(task, index, { maxFiles: 30, includeConfigs: true })
+  // Boost changed and related files to the front
+  const boosted = ranked.map(f => {
+    const isChanged = changedRelative.includes(f.relativePath)
+    const isRelated = relatedSet.has(f.relativePath)
+    return {
+      ...f,
+      score: f.score + (isChanged ? 50 : 0) + (isRelated ? 20 : 0),
+      reasons: [
+        ...f.reasons,
+        ...(isChanged ? ['directly changed'] : []),
+        ...(isRelated ? ['related to changed file'] : []),
+      ],
+    }
+  }).sort((a, b) => b.score - a.score)
+
+  const ctx = buildContext(scan, boosted, { maxTokens: 40_000, reserveTokens: 6_000 })
+  return { ctxText: formatContextForLLM(ctx), totalFiles: scan.totalFiles, selectedFiles: ctx.selectedFileCount }
+}
+
+// ─── Coordinator ──────────────────────────────────────────────────────────────
+
 export class CoordinatorAgent extends BaseAgent {
   private architect = new ArchitectAgent()
   private coder = new CoderAgent()
@@ -29,15 +111,15 @@ export class CoordinatorAgent extends BaseAgent {
   }
 
   /**
-   * Phase 1: Architect creates a plan and saves it to .agent/plan.json
+   * Phase 1: Architect creates a plan and saves it to .agent/plan.json.
+   * Context: project summary + broad ranked file list.
    */
   async plan(task: string): Promise<AgentResult> {
     banner('PHASE 1 — ARCHITECT')
     info(`Task: ${task}`)
 
-    const project = await scanProject()
-    const ctx = buildContext(project, task)
-    const ctxText = formatContextForLLM(ctx, project)
+    const { ctxText, totalFiles, selectedFiles } = await buildArchitectContext(task)
+    info(`Context: ${selectedFiles}/${totalFiles} files selected`)
 
     addTask(task, 'in_progress')
 
@@ -61,8 +143,8 @@ export class CoordinatorAgent extends BaseAgent {
   }
 
   /**
-   * Phase 2–4: Coder → Tester (with retry) → Reviewer → finalize
-   * If dryRun is true, the plan is shown but no changes are applied.
+   * Phase 2–4: Coder → Tester (with retry) → Reviewer → finalize.
+   * Each agent receives a context tailored to its role.
    */
   async apply(dryRun = false): Promise<AgentResult> {
     const storedPlan = readPlan() as AgentPlan | null
@@ -75,9 +157,8 @@ export class CoordinatorAgent extends BaseAgent {
       return this.ok('Dry run completed', storedPlan, ['run apply without --dry-run to execute'])
     }
 
-    const project = await scanProject()
-    const ctx = buildContext(project, storedPlan.task)
-    const ctxText = formatContextForLLM(ctx, project)
+    // Invalidate cache so coder/tester see fresh state after each attempt
+    invalidateCache()
 
     updateTaskStatus(storedPlan.task, 'in_progress')
 
@@ -88,15 +169,16 @@ export class CoordinatorAgent extends BaseAgent {
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       banner(`PHASE 2 — CODER${attempt > 1 ? ` (retry ${attempt - 1}/${MAX_RETRIES - 1})` : ''}`)
 
-      const coderContext =
-        attempt === 1
-          ? ctxText
-          : `${ctxText}\n\nFailed tests to fix (attempt ${attempt - 1}):\n${lastTesterErrors.join('\n')}`
+      const { ctxText: coderCtx, selectedFiles: coderSel, totalFiles } = await buildCoderContext(
+        storedPlan.task,
+        attempt > 1 ? lastTesterErrors.join('\n') : undefined,
+      )
+      info(`Context: ${coderSel}/${totalFiles} files selected for coder`)
 
       const coderResult = await this.coder.run({
         task: storedPlan.task,
         plan: storedPlan,
-        context: coderContext,
+        context: coderCtx,
       })
 
       if (!coderResult.success) {
@@ -106,14 +188,17 @@ export class CoordinatorAgent extends BaseAgent {
 
       banner(`PHASE 3 — TESTER (attempt ${attempt}/${MAX_RETRIES})`)
 
-      const freshProject = await scanProject()
-      const freshCtx = buildContext(freshProject, storedPlan.task)
-      const freshCtxText = formatContextForLLM(freshCtx, freshProject)
+      // Tester always rescans to see changes the coder just made
+      invalidateCache()
+      const { ctxText: testerCtx, selectedFiles: testerSel } = await buildCoderContext(
+        storedPlan.task,
+      )
+      info(`Context: ${testerSel}/${totalFiles} files selected for tester`)
 
       const testerResult = await this.tester.run({
         task: storedPlan.task,
         changedFiles: storedPlan.filesToChange.map(f => f.path),
-        context: freshCtxText,
+        context: testerCtx,
       })
 
       if (testerResult.success) {
@@ -144,14 +229,15 @@ export class CoordinatorAgent extends BaseAgent {
     // ── Phase 4: Reviewer ────────────────────────────────────────────────────
     banner('PHASE 4 — REVIEWER')
 
-    const reviewProject = await scanProject()
-    const reviewCtx = buildContext(reviewProject, storedPlan.task)
-    const reviewCtxText = formatContextForLLM(reviewCtx, reviewProject)
+    const changedPaths = storedPlan.filesToChange.map(f => f.path)
+    const { ctxText: reviewCtx, selectedFiles: reviewSel, totalFiles } =
+      await buildReviewerContext(storedPlan.task, changedPaths)
+    info(`Context: ${reviewSel}/${totalFiles} files selected for reviewer (changed + related)`)
 
     const reviewResult = await this.reviewer.run({
       task: storedPlan.task,
       plan: storedPlan,
-      context: reviewCtxText,
+      context: reviewCtx,
     })
 
     if (!reviewResult.success) {
@@ -185,15 +271,12 @@ export class CoordinatorAgent extends BaseAgent {
     )
   }
 
-  /**
-   * Run verification only (no coder — just tester)
-   */
+  /** Run verification only (no coder — just tester). */
   async test(): Promise<AgentResult> {
     banner('VERIFICATION')
 
-    const project = await scanProject()
-    const ctx = buildContext(project, 'verify build and tests')
-    const ctxText = formatContextForLLM(ctx, project)
+    const { ctxText, selectedFiles, totalFiles } = await buildCoderContext('verify build and tests')
+    info(`Context: ${selectedFiles}/${totalFiles} files selected`)
 
     return this.tester.run({
       task: 'verify build and tests',
@@ -202,9 +285,7 @@ export class CoordinatorAgent extends BaseAgent {
     })
   }
 
-  /**
-   * Run reviewer only against the stored plan
-   */
+  /** Run reviewer only against the stored plan. */
   async review(): Promise<AgentResult> {
     banner('REVIEW')
 
@@ -213,9 +294,12 @@ export class CoordinatorAgent extends BaseAgent {
       return this.fail('No plan found — run `qwen-agent plan "<task>"` first')
     }
 
-    const project = await scanProject()
-    const ctx = buildContext(project, storedPlan.task)
-    const ctxText = formatContextForLLM(ctx, project)
+    const changedPaths = storedPlan.filesToChange.map(f => f.path)
+    const { ctxText, selectedFiles, totalFiles } = await buildReviewerContext(
+      storedPlan.task,
+      changedPaths,
+    )
+    info(`Context: ${selectedFiles}/${totalFiles} files selected`)
 
     return this.reviewer.run({
       task: storedPlan.task,

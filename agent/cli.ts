@@ -12,6 +12,7 @@ import { applyCommand, applyTaskCommand } from './commands/apply.js'
 import { testCommand } from './commands/test.js'
 import { commitCommand } from './commands/commit.js'
 import { reviewCommand } from './commands/review.js'
+import { contextCommand } from './commands/context.js'
 import {
   configShowCommand,
   configCheckCommand,
@@ -34,9 +35,23 @@ program
 
 program
   .command('scan')
-  .description('Scan project files and update context in .agent/context.json')
+  .description('Scan project files, update .agent/context.json and .qwen-agent/ cache')
   .option('-d, --depth <depth>', 'Max directory scan depth', '5')
-  .action(async (opts: { depth?: string }) => { await scanCommand(opts) })
+  .option('--refresh', 'Force cache refresh')
+  .action(async (opts: { depth?: string; refresh?: boolean }) => { await scanCommand(opts) })
+
+program
+  .command('context')
+  .description('Show ranked relevant files and estimated token budget for a task')
+  .argument('<task>', 'Task description to select context for')
+  .option('--json', 'Output as JSON')
+  .option('--refresh', 'Force cache refresh before selecting')
+  .option('--max-files <n>', 'Maximum files to rank', '30')
+  .option('--max-tokens <n>', 'Token budget', '40000')
+  .action(async (
+    task: string,
+    opts: { json?: boolean; refresh?: boolean; maxFiles?: string; maxTokens?: string },
+  ) => { await contextCommand(task, opts) })
 
 program
   .command('plan')
