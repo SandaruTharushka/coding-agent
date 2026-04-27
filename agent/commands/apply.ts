@@ -1,9 +1,10 @@
 import { readPlan } from '../memory/store.js'
 import { CoordinatorAgent } from '../../src/agents/coordinator.agent.js'
 import { banner, info, warn, success, error } from '../output/formatter.js'
+import { verifyCommand } from './verify.js'
 import type { AgentPlan } from '../../src/agents/types.js'
 
-export async function applyCommand(opts: { dryRun?: boolean }): Promise<void> {
+export async function applyCommand(opts: { dryRun?: boolean; verify?: boolean }): Promise<void> {
   if (!process.env.QWEN_API_KEY) {
     console.error('\x1b[31m✗ QWEN_API_KEY is not set\x1b[0m')
     process.exit(1)
@@ -39,7 +40,12 @@ export async function applyCommand(opts: { dryRun?: boolean }): Promise<void> {
       info('Changed files:')
       files.forEach((f: string) => console.log(`  • ${f}`))
     }
-    console.log('\nRun `qwen-agent test` to verify, then `agent commit` to commit.')
+    if (opts.verify) {
+      console.log()
+      await verifyCommand({})
+    } else {
+      console.log('\nRun `qwen-agent verify` to check build/lint, then `agent commit` to commit.')
+    }
   } else {
     error('Apply failed:')
     result.errors?.forEach(e => console.log(`  • ${e}`))
@@ -49,7 +55,7 @@ export async function applyCommand(opts: { dryRun?: boolean }): Promise<void> {
 
 export async function applyTaskCommand(
   task: string,
-  opts: { model?: string; dryRun?: boolean },
+  opts: { model?: string; dryRun?: boolean; verify?: boolean },
 ): Promise<void> {
   if (!process.env.QWEN_API_KEY) {
     console.error('\x1b[31m✗ QWEN_API_KEY is not set\x1b[0m')
@@ -80,6 +86,10 @@ export async function applyTaskCommand(
     const files = data?.appliedFiles ?? []
     success(`\nDone. ${files.length} file(s) changed.`)
     files.forEach((f: string) => console.log(`  • ${f}`))
+    if (opts.verify) {
+      console.log()
+      await verifyCommand({})
+    }
   } else {
     error('Apply failed:')
     applyResult.errors?.forEach(e => console.log(`  • ${e}`))
