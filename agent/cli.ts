@@ -21,6 +21,7 @@ import {
   configCheckCommand,
   configSetKeyCommand,
 } from './commands/config.js'
+import { shellRunCommand, shellExplainCommand } from './commands/shell.js'
 
 const program = new Command()
 
@@ -115,6 +116,21 @@ program
   .option('--json', 'Output as JSON')
   .option('--limit <n>', 'Maximum sessions to display (default: 20)')
   .action((opts: { json?: boolean; limit?: string }) => { editSessionsCommand(opts) })
+
+// ─── Shell safety command ─────────────────────────────────────────────────────
+
+program
+  .command('shell')
+  .description('Run a shell command through the safety layer, or explain its risk level')
+  .argument('<command>', 'Shell command to run or explain')
+  .option('--explain', 'Show risk level and reason without executing')
+  .action(async (command: string, opts: { explain?: boolean }) => {
+    if (opts.explain) {
+      await shellExplainCommand(command)
+    } else {
+      await shellRunCommand(command)
+    }
+  })
 
 // ─── Config command group ─────────────────────────────────────────────────────
 

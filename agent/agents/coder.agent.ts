@@ -11,7 +11,9 @@ Rules:
 - Never hardcode secrets, API keys, or credentials
 - After every write/edit, verify with read_file
 - Handle edge cases; don't break existing functionality
-- Run run_command to check for compile errors when done`
+- SHELL SAFETY: Only use run_command for read-only checks (e.g. tsc --noEmit, git status).
+  Never issue destructive shell commands (rm, git reset, chmod, etc.) — use file tools instead.
+- Run run_command only to check for compile errors when done`
 
 export async function runCoderAgent(plan: Plan, context: string): Promise<string> {
   const planText = [

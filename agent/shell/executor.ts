@@ -1,27 +1,15 @@
 import { execSync } from 'child_process'
 import * as readline from 'readline'
+import {
+  validateCommand,
+  blockCommand,
+  requiresApproval as safetyRequiresApproval,
+  RiskLevel,
+  type SafetyResult,
+} from '../../src/safety/shellSafety.js'
 
-const BLOCKED: RegExp[] = [
-  /\brm\s+-rf\s+\//i,
-  /\bdd\s+if=/i,
-  /\bmkfs\b/i,
-  /\bshutdown\b/i,
-  /\breboot\b/i,
-  /\bdel\s+\/[fqs]/i,
-  /\bformat\s+[a-z]:/i,
-  /\bgit\s+reset\s+--hard\b/i,
-  /\bgit\s+push\s+--force\b/i,
-  /\bgit\s+clean\s+-fd\b/i,
-  />\s*\/dev\//i,
-  /\bcurl\s+.*\|\s*(bash|sh)\b/i,
-]
-
-const RISKY: RegExp[] = [
-  /\brm\s+-r\b/i,
-  /\bgit\s+reset\b/i,
-  /\bnpm\s+publish\b/i,
-  /\bgit\s+push\b/i,
-]
+export type { SafetyResult }
+export { validateCommand, blockCommand, RiskLevel }
 
 export interface ShellResult {
   stdout: string
@@ -29,24 +17,32 @@ export interface ShellResult {
   exitCode: number
 }
 
+/** @deprecated Use blockCommand() from shellSafety instead */
 export function isBlocked(command: string): boolean {
-  return BLOCKED.some(p => p.test(command))
+  return blockCommand(command)
 }
 
+/** @deprecated Use requiresApproval() from shellSafety instead */
 export function isRisky(command: string): boolean {
-  return RISKY.some(p => p.test(command))
+  return safetyRequiresApproval(command)
 }
 
-async function promptApproval(command: string): Promise<boolean> {
+async function promptApproval(result: SafetyResult): Promise<boolean> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
+  const prompt = [
+    '\x1b[33m',
+    '⚠  Command requires approval',
+    `   Command    : ${result.command}`,
+    `   Risk Level : ${result.level}`,
+    `   Reason     : ${result.reason}`,
+    'Approve? [y/N] \x1b[0m',
+  ].join('\n')
+
   return new Promise(resolve => {
-    rl.question(
-      `\x1b[33m⚠ Risky command detected:\n  ${command}\nApprove? [y/N] \x1b[0m`,
-      answer => {
-        rl.close()
-        resolve(answer.trim().toLowerCase() === 'y')
-      },
-    )
+    rl.question(prompt, answer => {
+      rl.close()
+      resolve(answer.trim().toLowerCase() === 'y')
+    })
   })
 }
 
@@ -54,18 +50,20 @@ export async function runCommand(
   command: string,
   options: { cwd?: string; requireApproval?: boolean; silent?: boolean } = {},
 ): Promise<ShellResult> {
-  if (isBlocked(command)) {
-    return {
-      stdout: '',
-      stderr: `Blocked: command matches a dangerous pattern — "${command}"`,
-      exitCode: 1,
-    }
+  const safety = validateCommand(command)
+
+  if (safety.level === RiskLevel.BLOCKED) {
+    const msg = `Blocked: ${safety.reason} — "${safety.command}"`
+    if (!options.silent) process.stderr.write('\x1b[31m✖  ' + msg + '\x1b[0m\n')
+    return { stdout: '', stderr: msg, exitCode: 1 }
   }
 
-  if (options.requireApproval !== false && isRisky(command)) {
-    const approved = await promptApproval(command)
+  if (options.requireApproval !== false && safety.requiresApproval) {
+    const approved = await promptApproval(safety)
     if (!approved) {
-      return { stdout: '', stderr: 'Command rejected by user', exitCode: 1 }
+      const msg = 'Command rejected by user'
+      if (!options.silent) process.stderr.write('\x1b[33m✖  ' + msg + '\x1b[0m\n')
+      return { stdout: '', stderr: msg, exitCode: 1 }
     }
   }
 
