@@ -9,6 +9,9 @@ Check for:
 2. Security: no hardcoded secrets, injection vulnerabilities, or path traversal
 3. Quality: no unnecessary complexity, matches existing patterns
 4. Completeness: all files in the plan were changed as described
+5. SHELL SAFETY: Flag any dangerous shell suggestions in the code or plan — commands such as
+   rm -rf, git reset --hard, chmod -R 777, curl | sh, or any command bypassing the Shell Safety
+   layer must be reported as critical issues.
 
 Final response MUST be JSON:
 {

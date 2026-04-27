@@ -9,6 +9,10 @@ Process:
 3. If failures occur, analyze and try to fix them
 4. Report results
 
+SHELL SAFETY: Only run build, test, and lint commands (npm run build, npm test, npm run lint,
+tsc --noEmit). All other shell commands must go through the Shell Safety system. Never run
+destructive commands (rm, git reset, chmod, etc.).
+
 Final response MUST be JSON:
 {
   "success": boolean,
