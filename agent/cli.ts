@@ -8,9 +8,10 @@ loadDotEnv('.env')
 import { initCommand } from './commands/init.js'
 import { scanCommand } from './commands/scan.js'
 import { planCommand } from './commands/plan.js'
-import { applyCommand } from './commands/apply.js'
+import { applyCommand, applyTaskCommand } from './commands/apply.js'
 import { testCommand } from './commands/test.js'
 import { commitCommand } from './commands/commit.js'
+import { reviewCommand } from './commands/review.js'
 import {
   configShowCommand,
   configCheckCommand,
@@ -20,8 +21,8 @@ import {
 const program = new Command()
 
 program
-  .name('agent')
-  .description('Production-grade CLI coding agent powered by Qwen LLM')
+  .name('qwen-agent')
+  .description('Multi-agent CLI coding assistant powered by Qwen LLM')
   .version('1.0.0')
 
 // ─── Core commands ────────────────────────────────────────────────────────────
@@ -46,15 +47,28 @@ program
 
 program
   .command('apply')
-  .description('Execute the current plan with the coder agent')
-  .option('--dry-run', 'Preview diffs without making changes')
-  .action(async (opts: { dryRun?: boolean }) => { await applyCommand(opts) })
+  .description('Execute the current plan (or plan + apply a new task in one step)')
+  .argument('[task]', 'Optional task — if provided, creates a plan then applies it immediately')
+  .option('-m, --model <model>', 'Qwen model override (e.g. qwen-plus, qwen-max)')
+  .option('--dry-run', 'Preview plan without making changes')
+  .action(async (task: string | undefined, opts: { model?: string; dryRun?: boolean }) => {
+    if (task) {
+      await applyTaskCommand(task, opts)
+    } else {
+      await applyCommand(opts)
+    }
+  })
 
 program
   .command('test')
-  .description('Run build and test suite, optionally auto-fix errors via LLM')
-  .option('--fix', 'Auto-fix errors with LLM (up to 3 retries)')
+  .description('Run build and test suite via the tester agent')
+  .option('--fix', 'Auto-fix errors with LLM (handled by coordinator retry loop)')
   .action(async (opts: { fix?: boolean }) => { await testCommand(opts) })
+
+program
+  .command('review')
+  .description('Run the reviewer agent against the current plan and implementation')
+  .action(async () => { await reviewCommand() })
 
 program
   .command('commit')
