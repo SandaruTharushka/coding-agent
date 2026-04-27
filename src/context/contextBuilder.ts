@@ -5,6 +5,7 @@ import type { ScanResult } from './projectScanner.js'
 import { selectRelevantFiles } from './relevanceSelector.js'
 import { estimateTokens, trimToBudget } from './tokenBudget.js'
 import type { BudgetChunk } from './tokenBudget.js'
+import { getMemorySummary } from '../memory/memoryStore.js'
 
 const CHUNK_SIZE_CHARS = 6_000
 const DEFAULT_MAX_TOKENS = 40_000
@@ -29,6 +30,7 @@ export interface BuildOptions {
   maxFiles?: number
   task?: string
   includeConfigs?: boolean
+  includeMemory?: boolean
 }
 
 function chunkFile(relativePath: string, content: string, basePriority: number): ContextChunk[] {
@@ -114,6 +116,14 @@ export function buildLLMContext(
     `## File Tree\n\`\`\`\n${scan.fileTree}\n\`\`\``,
   ]
 
+  // Inject memory summary when relevant and within token budget
+  if (options.includeMemory !== false) {
+    const memorySummaryText = buildMemorySection(options.task ?? '', availableForFiles)
+    if (memorySummaryText) {
+      parts.push(memorySummaryText)
+    }
+  }
+
   const chunksByFile = new Map<string, ContextChunk[]>()
   for (const chunk of keptChunks) {
     if (!chunksByFile.has(chunk.filePath)) chunksByFile.set(chunk.filePath, [])
@@ -137,6 +147,51 @@ export function buildLLMContext(
     filesOmitted,
     totalTokens: estimateTokens(text),
     truncated: filesOmitted.length > 0,
+  }
+}
+
+function buildMemorySection(task: string, tokenBudget: number): string {
+  const MEMORY_TOKEN_LIMIT = Math.min(2000, Math.floor(tokenBudget * 0.15))
+  try {
+    const { recentTasks, recentDecisions, projectNotes } = getMemorySummary({
+      taskLimit: 5,
+      decisionLimit: 8,
+    })
+    const taskLower = task.toLowerCase()
+    const lines: string[] = ['## Memory / Task History']
+
+    if (recentTasks.length > 0) {
+      lines.push('### Recent Tasks')
+      for (const t of recentTasks) {
+        lines.push(`- [${t.status}] ${t.title} (${t.createdAt.slice(0, 10)})`)
+      }
+    }
+
+    // Only include decisions relevant to the current task
+    const relevantDecisions = recentDecisions.filter(d =>
+      taskLower.length === 0 ||
+      d.decision.toLowerCase().includes(taskLower.slice(0, 30)) ||
+      d.reason.toLowerCase().includes(taskLower.slice(0, 30)),
+    )
+    if (relevantDecisions.length > 0) {
+      lines.push('### Related Decisions')
+      for (const d of relevantDecisions.slice(0, 5)) {
+        lines.push(`- [${d.agent}] ${d.decision.slice(0, 100)}`)
+      }
+    }
+
+    if (projectNotes.length > 0) {
+      lines.push('### Project Notes')
+      for (const n of projectNotes) {
+        lines.push(`- **${n.title}**: ${n.content.slice(0, 120)}`)
+      }
+    }
+
+    if (lines.length <= 1) return ''
+    const text = lines.join('\n')
+    return estimateTokens(text) <= MEMORY_TOKEN_LIMIT ? text : ''
+  } catch {
+    return ''
   }
 }
 

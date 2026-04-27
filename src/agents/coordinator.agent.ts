@@ -17,6 +17,13 @@ import {
   updateTaskStatus,
   addDecision,
 } from '../../agent/memory/store.js'
+import {
+  addTask as memAddTask,
+  updateTask as memUpdateTask,
+  addDecision as memAddDecision,
+  addAgentRun as memAddAgentRun,
+  findTaskByRequest,
+} from '../../src/memory/memoryStore.js'
 import { banner, info, success, error, warn, section } from '../../agent/output/formatter.js'
 import { backupFiles } from '../patch/backupManager.js'
 import { generateDiffSummary } from '../patch/diffPreview.js'
@@ -78,8 +85,30 @@ export class CoordinatorAgent extends BaseAgent {
 
     addTask(task, 'in_progress')
 
+    // Create rich TaskRecord in memory store
+    const memTask = memAddTask({
+      title: task.slice(0, 120),
+      userRequest: task,
+      status: 'planned',
+      changedFiles: [],
+      verificationSummary: '',
+      commitHash: '',
+    })
+
     const architectResult = await this.architect.run({ task, context: ctx.text })
+
+    // Record architect run
+    memAddAgentRun({
+      taskId: memTask.id,
+      agent: 'architect',
+      inputSummary: task.slice(0, 300),
+      outputSummary: architectResult.summary.slice(0, 300),
+      success: architectResult.success,
+      errors: architectResult.errors ?? [],
+    })
+
     if (!architectResult.success || !architectResult.data) {
+      memUpdateTask(memTask.id, { status: 'failed' })
       return this.fail('Architect failed to create a plan', architectResult.errors, [
         'check task description and retry',
       ])
@@ -91,6 +120,14 @@ export class CoordinatorAgent extends BaseAgent {
       `Plan created for: ${task}`,
       `${agentPlan.filesToChange.length} file(s), ${agentPlan.steps.length} step(s)`,
     )
+
+    // Record architectural decision
+    memAddDecision({
+      taskId: memTask.id,
+      decision: `Plan created for: ${task.slice(0, 100)}`,
+      reason: `${agentPlan.filesToChange.length} file(s), ${agentPlan.steps.length} step(s)`,
+      agent: 'architect',
+    })
 
     return this.ok(`Plan created: ${agentPlan.filesToChange.length} file(s) planned`, agentPlan, [
       'run apply to execute the plan',
@@ -130,6 +167,19 @@ export class CoordinatorAgent extends BaseAgent {
 
     updateTaskStatus(storedPlan.task, 'in_progress')
 
+    // Locate (or create) the memory TaskRecord for this task
+    let memTask = findTaskByRequest(storedPlan.task)
+    if (!memTask) {
+      memTask = memAddTask({
+        title: storedPlan.task.slice(0, 120),
+        userRequest: storedPlan.task,
+        status: 'planned',
+        changedFiles: [],
+        verificationSummary: '',
+        commitHash: '',
+      })
+    }
+
     // ── Safe Edit: create session + backup planned files ──────────────────────
     const session = createSession(storedPlan.task)
     const plannedPaths = storedPlan.filesToChange
@@ -159,10 +209,21 @@ export class CoordinatorAgent extends BaseAgent {
         context: coderContext,
       })
 
+      // Record coder run
+      memAddAgentRun({
+        taskId: memTask.id,
+        agent: 'coder',
+        inputSummary: `attempt ${attempt}: ${storedPlan.task.slice(0, 200)}`,
+        outputSummary: coderResult.summary.slice(0, 300),
+        success: coderResult.success,
+        errors: coderResult.errors ?? [],
+      })
+
       if (!coderResult.success) {
         session.status = 'failed'
         saveSession(session)
         updateTaskStatus(storedPlan.task, 'failed', coderResult.errors?.join('; '))
+        memUpdateTask(memTask.id, { status: 'failed' })
         return this.fail('Coder failed to apply changes', coderResult.errors)
       }
 
@@ -183,8 +244,21 @@ export class CoordinatorAgent extends BaseAgent {
         context: freshCtx.text,
       })
 
+      // Record tester run
+      memAddAgentRun({
+        taskId: memTask.id,
+        agent: 'tester',
+        inputSummary: `attempt ${attempt}: verify ${storedPlan.task.slice(0, 150)}`,
+        outputSummary: testerResult.summary.slice(0, 300),
+        success: testerResult.success,
+        errors: testerResult.errors ?? [],
+      })
+
       if (testerResult.success) {
         testerPassed = true
+        memUpdateTask(memTask.id, {
+          verificationSummary: testerResult.summary.slice(0, 300),
+        })
         break
       }
 
@@ -202,6 +276,10 @@ export class CoordinatorAgent extends BaseAgent {
           warn(`Auto-rollback failed — run: qwen-agent rollback ${session.id}`)
         }
         updateTaskStatus(storedPlan.task, 'failed', lastTesterErrors.join('; '))
+        memUpdateTask(memTask.id, {
+          status: 'rolled_back',
+          verificationSummary: lastTesterErrors.join('; ').slice(0, 300),
+        })
         return this.fail(
           `Tests failed after ${MAX_RETRIES} attempt(s) — changes rolled back`,
           lastTesterErrors,
@@ -233,6 +311,22 @@ export class CoordinatorAgent extends BaseAgent {
       context: reviewCtx.text,
     })
 
+    // Record reviewer run and decision
+    memAddAgentRun({
+      taskId: memTask.id,
+      agent: 'reviewer',
+      inputSummary: `review: ${storedPlan.task.slice(0, 200)}`,
+      outputSummary: reviewResult.summary.slice(0, 300),
+      success: reviewResult.success,
+      errors: reviewResult.errors ?? [],
+    })
+    memAddDecision({
+      taskId: memTask.id,
+      decision: reviewResult.success ? 'Implementation approved' : 'Implementation rejected',
+      reason: (reviewResult.errors ?? [reviewResult.summary]).join('; ').slice(0, 300),
+      agent: 'reviewer',
+    })
+
     if (!reviewResult.success) {
       error('Reviewer rejected the implementation:')
       reviewResult.errors?.forEach(i => warn(`  • ${i}`))
@@ -244,6 +338,7 @@ export class CoordinatorAgent extends BaseAgent {
         warn(`Auto-rollback failed — run: qwen-agent rollback ${session.id}`)
       }
       updateTaskStatus(storedPlan.task, 'failed', reviewResult.errors?.join('; '))
+      memUpdateTask(memTask.id, { status: 'rolled_back' })
       return this.fail('Reviewer rejected implementation — changes rolled back', reviewResult.errors, [
         'address issues and run apply again',
       ])
@@ -261,6 +356,7 @@ export class CoordinatorAgent extends BaseAgent {
     storedPlan.appliedAt = new Date().toISOString()
     writePlan(storedPlan as Plan)
     updateTaskStatus(storedPlan.task, 'completed')
+    memUpdateTask(memTask.id, { status: 'applied', changedFiles: appliedFiles })
 
     // Record applied files and diffs in the session
     session.changedFiles = appliedFiles
