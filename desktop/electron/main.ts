@@ -20,7 +20,7 @@ function createWindow(): void {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
   })
 
@@ -216,15 +216,22 @@ ipcMain.handle('git:status', async () => {
 // ── Git: commit ───────────────────────────────────────────────────────────────
 ipcMain.handle('git:commit', async (_, message: string) => {
   let output = ''
-  const args = message ? ['git', 'commit', '-m', message] : ['commit']
-  const isNativeGit = message !== undefined
-  if (isNativeGit) {
+  if (message !== undefined) {
+    // Write message to a temp file to avoid any shell injection risk
+    const tmpMsg = path.join(ROOT, '.qwen-agent', `commit-msg-${Date.now()}.tmp`)
     try {
+      fs.mkdirSync(path.dirname(tmpMsg), { recursive: true })
+      fs.writeFileSync(tmpMsg, String(message), 'utf-8')
       execSync('git add -A', { cwd: ROOT })
-      const result = execSync(`git commit -m ${JSON.stringify(message)}`, { cwd: ROOT, encoding: 'utf-8' })
+      const result = execSync(`git commit -F ${JSON.stringify(tmpMsg)}`, {
+        cwd: ROOT,
+        encoding: 'utf-8',
+      })
       return { success: true, output: result }
     } catch (err: unknown) {
       return { success: false, error: (err as Error).message }
+    } finally {
+      if (fs.existsSync(tmpMsg)) fs.unlinkSync(tmpMsg)
     }
   }
   const code = await spawnCLI(['commit'], (msg) => { output += msg })

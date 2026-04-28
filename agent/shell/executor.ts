@@ -98,6 +98,9 @@ export async function runCommand(
 }
 
 export function runSync(command: string, cwd?: string): string {
+  if (blockCommand(command)) {
+    throw new Error(`Blocked command rejected by runSync: "${command}"`)
+  }
   try {
     return execSync(command, {
       cwd: cwd ?? process.cwd(),
