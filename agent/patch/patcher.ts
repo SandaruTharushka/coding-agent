@@ -5,6 +5,15 @@ import type { Plan, PatchResult } from '../types.js'
 import { writeFile } from '../tools/file.tools.js'
 
 const BACKUP_DIR = path.join('.agent', 'backups')
+const PROJECT_ROOT = process.cwd()
+
+function safeDelete(filePath: string): void {
+  const abs = path.resolve(filePath)
+  if (!abs.startsWith(PROJECT_ROOT + path.sep) && abs !== PROJECT_ROOT) {
+    throw new Error(`Delete blocked — path escapes project root: ${filePath}`)
+  }
+  if (fs.existsSync(abs)) fs.unlinkSync(abs)
+}
 
 function ts(): string {
   return new Date().toISOString().replace(/[:.]/g, '-')
@@ -80,7 +89,7 @@ export async function applyPlan(plan: Plan, dryRun = false): Promise<PatchResult
   for (const change of plan.filesToChange) {
     try {
       if (change.action === 'delete') {
-        if (!dryRun && fs.existsSync(change.path)) fs.unlinkSync(change.path)
+        if (!dryRun) safeDelete(change.path)
         appliedFiles.push(change.path)
         continue
       }

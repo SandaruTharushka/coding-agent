@@ -140,6 +140,17 @@ async function execBaseTool(name: string, args: Record<string, unknown>): Promis
         args.include as string | undefined,
       )
     case 'run_command': {
+      // In agent context, only SAFE-classified commands run automatically.
+      // CAUTION/DANGEROUS commands require human approval which cannot be
+      // granted interactively here — reject them so the LLM uses a safe alternative.
+      const { validateCommand, RiskLevel } = await import('../../src/safety/shellSafety.js')
+      const safety = validateCommand(args.command as string)
+      if (safety.level === RiskLevel.BLOCKED) {
+        return `BLOCKED: ${safety.reason}. This command is forbidden — choose a different approach.`
+      }
+      if (safety.level !== RiskLevel.SAFE) {
+        return `REJECTED (${safety.level}): "${safety.command}" requires human approval and cannot run in automated agent context. ${safety.reason}. Only read-only / build / lint / test commands are permitted here.`
+      }
       const r = await runCommand(args.command as string, {
         cwd: args.cwd as string | undefined,
         requireApproval: false,
