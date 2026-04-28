@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
-import { spawn, execSync } from 'child_process'
+import { spawn, execSync, spawnSync } from 'child_process'
 import path from 'path'
 import fs from 'fs'
 
@@ -73,6 +73,23 @@ function spawnCLI(
   })
 }
 
+function runGit(args: string[], timeout = 10000): string {
+  const result = spawnSync('git', args, {
+    cwd: ROOT,
+    encoding: 'utf-8',
+    timeout,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+
+  if (result.status !== 0) {
+    const stderr = (result.stderr || '').trim()
+    const stdout = (result.stdout || '').trim()
+    throw new Error(stderr || stdout || `git ${args.join(' ')} failed`)
+  }
+
+  return result.stdout || ''
+}
+
 // ── Agent: run full apply pipeline (streaming) ────────────────────────────────
 ipcMain.handle('agent:run-task', async (event, task: string) => {
   const sessionId = `session-${Date.now()}`
@@ -106,8 +123,8 @@ ipcMain.handle('agent:build-context', async (_, task: string) => {
 // ── Agent: preview diff ───────────────────────────────────────────────────────
 ipcMain.handle('agent:preview-diff', async () => {
   try {
-    const diff = execSync('git diff HEAD', { cwd: ROOT, encoding: 'utf-8', timeout: 10000 })
-    const status = execSync('git status --short', { cwd: ROOT, encoding: 'utf-8', timeout: 5000 })
+    const diff = runGit(['diff', 'HEAD'], 10000)
+    const status = runGit(['status', '--short'], 5000)
     let sessions = ''
     await spawnCLI(['edit-sessions', '--json'], (msg) => { sessions += msg })
     return { success: true, diff, status, sessions }
@@ -204,9 +221,9 @@ ipcMain.handle('project:get-file-content', async (_, filePath: string) => {
 // ── Git: status ───────────────────────────────────────────────────────────────
 ipcMain.handle('git:status', async () => {
   try {
-    const branch = execSync('git rev-parse --abbrev-ref HEAD', { cwd: ROOT, encoding: 'utf-8' }).trim()
-    const status = execSync('git status --short', { cwd: ROOT, encoding: 'utf-8' })
-    const diff = execSync('git diff --stat HEAD', { cwd: ROOT, encoding: 'utf-8' })
+    const branch = runGit(['rev-parse', '--abbrev-ref', 'HEAD']).trim()
+    const status = runGit(['status', '--short'])
+    const diff = runGit(['diff', '--stat', 'HEAD'])
     return { success: true, branch, status, diff }
   } catch (err: unknown) {
     return { success: false, error: (err as Error).message, branch: 'unknown', status: '', diff: '' }
