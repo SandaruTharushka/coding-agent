@@ -21,6 +21,23 @@ import {
   configCheckCommand,
   configSetKeyCommand,
 } from './commands/config.js'
+import {
+  aiProvidersCommand,
+  aiConfigShowCommand,
+  aiConfigSetDefaultCommand,
+  aiKeySetCommand,
+  aiKeyRemoveCommand,
+  aiModelsCommand,
+  aiTestCommand,
+  aiProfileSetCommand,
+} from './commands/ai.js'
+import {
+  usageSummaryCommand,
+  usageProvidersCommand,
+  usageModelsCommand,
+  usageTasksCommand,
+  usageClearCommand,
+} from './commands/usage.js'
 import { shellRunCommand, shellExplainCommand } from './commands/shell.js'
 import { verifyCommand } from './commands/verify.js'
 import {
@@ -209,11 +226,118 @@ program
     }
   })
 
+// ─── AI provider command group ────────────────────────────────────────────────
+
+const aiCmd = program
+  .command('ai')
+  .description('Manage AI providers, API keys, models and agent profiles')
+
+aiCmd
+  .command('providers')
+  .description('List all AI providers and their connection status')
+  .action(() => { aiProvidersCommand() })
+
+const aiConfigCmd = aiCmd
+  .command('config')
+  .description('AI configuration management')
+
+aiConfigCmd
+  .command('show')
+  .description('Display full AI configuration (keys masked)')
+  .action(() => { aiConfigShowCommand() })
+
+aiConfigCmd
+  .command('set-default')
+  .description('Set the default AI provider and model')
+  .option('--provider <id>', 'Provider ID (qwen|openai|anthropic|gemini|openrouter|deepseek|groq|ollama)')
+  .option('--model <model>', 'Model name')
+  .action((opts: { provider?: string; model?: string }) => { aiConfigSetDefaultCommand(opts) })
+
+const aiKeyCmd = aiCmd
+  .command('key')
+  .description('Manage provider API keys')
+
+aiKeyCmd
+  .command('set')
+  .description('Set API key for a provider (saved to .env)')
+  .option('--provider <id>', 'Provider ID', 'qwen')
+  .action(async (opts: { provider?: string }) => { await aiKeySetCommand(opts) })
+
+aiKeyCmd
+  .command('remove')
+  .description('Remove API key for a provider from .env')
+  .option('--provider <id>', 'Provider ID', 'qwen')
+  .action((opts: { provider?: string }) => { aiKeyRemoveCommand(opts) })
+
+aiCmd
+  .command('models')
+  .description('List known models for a provider')
+  .option('--provider <id>', 'Provider ID', 'qwen')
+  .action((opts: { provider?: string }) => { aiModelsCommand(opts) })
+
+aiCmd
+  .command('test')
+  .description('Test connection to a provider by making a minimal API call')
+  .option('--provider <id>', 'Provider ID')
+  .option('--model <model>', 'Model name')
+  .action(async (opts: { provider?: string; model?: string }) => { await aiTestCommand(opts) })
+
+aiCmd
+  .command('profile')
+  .description('Agent model profile management')
+  .command('set')
+  .description('Set provider/model for a specific agent role')
+  .option('--agent <name>', 'Agent name (coordinator|architect|coder|tester|reviewer)')
+  .option('--provider <id>', 'Provider ID')
+  .option('--model <model>', 'Model name')
+  .action((opts: { agent?: string; provider?: string; model?: string }) => {
+    aiProfileSetCommand(opts)
+  })
+
+// ─── Usage command group ──────────────────────────────────────────────────────
+
+const usageCmd = program
+  .command('usage')
+  .description('View token usage and cost estimates')
+
+usageCmd
+  .command('summary')
+  .description('Show overall usage summary across all providers and models')
+  .option('--json', 'Output as JSON')
+  .action((opts: { json?: boolean }) => { usageSummaryCommand(opts) })
+
+usageCmd
+  .command('providers')
+  .description('Show usage grouped by provider')
+  .option('--provider <id>', 'Filter by provider ID')
+  .option('--json', 'Output as JSON')
+  .action((opts: { provider?: string; json?: boolean }) => { usageProvidersCommand(opts) })
+
+usageCmd
+  .command('models')
+  .description('Show usage grouped by model')
+  .option('--model <model>', 'Filter by model name')
+  .option('--json', 'Output as JSON')
+  .action((opts: { model?: string; json?: boolean }) => { usageModelsCommand(opts) })
+
+usageCmd
+  .command('tasks')
+  .description('Show usage grouped by task ID')
+  .option('--task <id>', 'Filter by task ID')
+  .option('--json', 'Output as JSON')
+  .action((opts: { task?: string; json?: boolean }) => { usageTasksCommand(opts) })
+
+usageCmd
+  .command('clear')
+  .description('Delete all usage records (irreversible)')
+  .option('--confirm', 'Required to actually clear')
+  .action((opts: { confirm?: boolean }) => { usageClearCommand(opts) })
+
 // ─── Config command group ─────────────────────────────────────────────────────
 
 const configCmd = program
   .command('config')
-  .description('Manage Qwen configuration')
+  .description('Manage configuration (legacy — use `ai` commands for multi-provider)')
 
 configCmd
   .command('show')

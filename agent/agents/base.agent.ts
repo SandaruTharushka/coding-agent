@@ -14,6 +14,14 @@ export interface AgentOptions {
   maxIterations?: number
   stream?: boolean
   silent?: boolean
+  /** Provider to use (routes to unified client; defaults to configured default) */
+  providerId?: string
+  /** Model override (defaults to configured default for the provider) */
+  model?: string
+  modelOverride?: string
+  /** For usage tracking */
+  agentName?: string
+  taskId?: string
 }
 
 export type ToolExecutor = (name: string, args: Record<string, unknown>) => Promise<string> | string
@@ -178,6 +186,14 @@ export async function runAgent(
   options: AgentOptions,
   customExecutor?: ToolExecutor,
 ): Promise<string> {
+  // Resolve provider/model via unified client
+  const { loadAIConfig } = await import('../../src/config/aiConfig.js')
+  const { streamLLM, callLLM } = await import('../../src/llm/unifiedLLMClient.js')
+  const cfg = loadAIConfig()
+  const providerId = options.providerId ?? cfg.defaultProvider
+  const model = options.model ?? options.modelOverride ?? cfg.defaultModel
+  const callOptions = { providerId, model, agentName: options.agentName, taskId: options.taskId }
+
   const tools = [...BASE_TOOLS, ...(options.tools ?? [])]
   const allMessages: QwenMessage[] = [
     { role: 'system', content: options.systemPrompt },
@@ -195,21 +211,19 @@ export async function runAgent(
     if (useStream) {
       process.stdout.write('\n\x1b[36mAgent:\x1b[0m ')
       try {
-        const stream = qwenChatCompletionStream({
-          messages: allMessages,
-          tools,
+        const stream = streamLLM({
+          messages: allMessages as import('../../src/llm/providers/types.js').LLMMessage[],
+          tools: tools as import('../../src/llm/providers/types.js').LLMTool[],
           tool_choice: 'auto',
-        })
+        }, callOptions)
         const pending = new Map<number, { id: string; name: string; args: string }>()
         for await (const chunk of stream) {
-          const delta = chunk.choices[0]?.delta
-          if (!delta) continue
-          if (delta.content) {
-            process.stdout.write(delta.content)
-            assistantContent += delta.content
+          if (chunk.content) {
+            process.stdout.write(chunk.content)
+            assistantContent += chunk.content
           }
-          if (delta.tool_calls) {
-            for (const tc of delta.tool_calls) {
+          if (chunk.toolCalls) {
+            for (const tc of chunk.toolCalls) {
               const idx = tc.index ?? 0
               if (!pending.has(idx))
                 pending.set(idx, { id: tc.id ?? '', name: tc.function?.name ?? '', args: '' })
@@ -226,17 +240,23 @@ export async function runAgent(
           function: { name: tc.name, arguments: tc.args },
         }))
       } catch {
-        const resp = await qwenChatCompletion({ messages: allMessages, tools, tool_choice: 'auto' })
-        const msg = resp.choices[0]?.message
-        assistantContent = msg?.content ?? ''
-        toolCalls = msg?.tool_calls ?? []
+        const resp = await callLLM({
+          messages: allMessages as import('../../src/llm/providers/types.js').LLMMessage[],
+          tools: tools as import('../../src/llm/providers/types.js').LLMTool[],
+          tool_choice: 'auto',
+        }, callOptions)
+        assistantContent = resp.text
+        toolCalls = (resp.toolCalls ?? []) as QwenToolCall[]
         if (assistantContent) process.stdout.write(assistantContent)
       }
     } else {
-      const resp = await qwenChatCompletion({ messages: allMessages, tools, tool_choice: 'auto' })
-      const msg = resp.choices[0]?.message
-      assistantContent = msg?.content ?? ''
-      toolCalls = msg?.tool_calls ?? []
+      const resp = await callLLM({
+        messages: allMessages as import('../../src/llm/providers/types.js').LLMMessage[],
+        tools: tools as import('../../src/llm/providers/types.js').LLMTool[],
+        tool_choice: 'auto',
+      }, callOptions)
+      assistantContent = resp.text
+      toolCalls = (resp.toolCalls ?? []) as QwenToolCall[]
     }
 
     if (toolCalls.length === 0) {
