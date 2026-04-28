@@ -315,3 +315,189 @@ ipcMain.handle('config:update', async (_, cfg: Record<string, string | number>) 
   fs.writeFileSync(envPath, content + '\n', 'utf-8')
   return { success: true }
 })
+
+// ── AI Config: get (multi-provider) ──────────────────────────────────────────
+ipcMain.handle('ai:get-config', async () => {
+  try {
+    let output = ''
+    await spawnCLI(['ai', 'config', 'show', '--json-ipc'], (msg) => { output += msg })
+    const marker = '__AI_CONFIG__:'
+    const line = output.split('\n').find(l => l.startsWith(marker))
+    if (line) {
+      return { success: true, config: JSON.parse(line.slice(marker.length)) }
+    }
+    // Fallback: read env and config file directly
+    const envPath = path.join(ROOT, '.env')
+    const envVars: Record<string, string> = {}
+    if (fs.existsSync(envPath)) {
+      for (const line2 of fs.readFileSync(envPath, 'utf-8').split('\n')) {
+        const m = line2.match(/^([A-Z_A-Z0-9_]+)=(.*)$/)
+        if (m) envVars[m[1]] = m[2].replace(/^["']|["']$/g, '').split('#')[0].trim()
+      }
+    }
+    const PROVIDERS = ['qwen', 'openai', 'anthropic', 'gemini', 'openrouter', 'deepseek', 'groq', 'ollama']
+    const KEY_MAP: Record<string, string> = {
+      qwen: 'QWEN_API_KEY', openai: 'OPENAI_API_KEY', anthropic: 'ANTHROPIC_API_KEY',
+      gemini: 'GEMINI_API_KEY', openrouter: 'OPENROUTER_API_KEY', deepseek: 'DEEPSEEK_API_KEY',
+      groq: 'GROQ_API_KEY',
+    }
+    const NAMES: Record<string, string> = {
+      qwen: 'Qwen / DashScope', openai: 'OpenAI', anthropic: 'Anthropic',
+      gemini: 'Google Gemini', openrouter: 'OpenRouter', deepseek: 'DeepSeek',
+      groq: 'Groq', ollama: 'Ollama (local)',
+    }
+    function maskKey(k: string): string {
+      if (!k) return '(not set)'
+      if (k.length <= 8) return '****'
+      return k.slice(0, 4) + '****' + k.slice(-4)
+    }
+    const providerStatuses = PROVIDERS.map(id => {
+      const envKey = KEY_MAP[id]
+      const key = envKey ? (envVars[envKey] ?? '') : ''
+      const noKey = id === 'ollama'
+      return {
+        id,
+        name: NAMES[id] ?? id,
+        status: noKey ? 'no-key-required' : key ? 'connected' : 'missing-key',
+        maskedKey: noKey ? 'n/a' : maskKey(key),
+      }
+    })
+    const aiConfigPath = path.join(ROOT, '.qwen-agent', 'ai-config.json')
+    let persisted: Record<string, unknown> = {}
+    if (fs.existsSync(aiConfigPath)) {
+      try { persisted = JSON.parse(fs.readFileSync(aiConfigPath, 'utf-8')) } catch { /* ignore */ }
+    }
+    return {
+      success: true,
+      config: {
+        defaultProvider: (persisted.defaultProvider as string) ?? envVars.AI_DEFAULT_PROVIDER ?? 'qwen',
+        defaultModel: (persisted.defaultModel as string) ?? envVars.QWEN_MODEL ?? 'qwen-plus',
+        providerStatuses,
+        agentProfiles: (persisted.agentProfiles as Record<string, unknown>) ?? {},
+        maxTokens: parseInt(envVars.QWEN_MAX_TOKENS ?? '8192'),
+        timeoutMs: parseInt(envVars.QWEN_TIMEOUT_MS ?? '60000'),
+        maxRetries: parseInt(envVars.QWEN_MAX_RETRIES ?? '3'),
+        stream: envVars.QWEN_STREAM !== 'false',
+      },
+    }
+  } catch (err: unknown) {
+    return { success: false, error: (err as Error).message }
+  }
+})
+
+// ── AI Config: set default ────────────────────────────────────────────────────
+ipcMain.handle('ai:set-default', async (_, provider: string, model: string) => {
+  let output = ''
+  const code = await spawnCLI(
+    ['ai', 'config', 'set-default', '--provider', provider, '--model', model],
+    (msg) => { output += msg },
+  )
+  return { success: code === 0, output }
+})
+
+// ── AI Config: set provider key ───────────────────────────────────────────────
+ipcMain.handle('ai:set-provider-key', async (event, provider: string, apiKey: string) => {
+  // Write key directly to .env without spawning interactive CLI
+  const envPath = path.join(ROOT, '.env')
+  const KEY_MAP: Record<string, string> = {
+    qwen: 'QWEN_API_KEY', openai: 'OPENAI_API_KEY', anthropic: 'ANTHROPIC_API_KEY',
+    gemini: 'GEMINI_API_KEY', openrouter: 'OPENROUTER_API_KEY', deepseek: 'DEEPSEEK_API_KEY',
+    groq: 'GROQ_API_KEY',
+  }
+  const envVar = KEY_MAP[provider]
+  if (!envVar) return { success: false, error: `Unknown provider: ${provider}` }
+  if (!apiKey || apiKey.includes('•')) return { success: false, error: 'Invalid key' }
+
+  try {
+    let content = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf-8') : ''
+    const regex = new RegExp(`^${envVar}=.*`, 'm')
+    if (regex.test(content)) {
+      content = content.replace(regex, `${envVar}=${apiKey}`)
+    } else {
+      content = content.trimEnd() + `\n${envVar}=${apiKey}\n`
+    }
+    fs.writeFileSync(envPath, content, 'utf-8')
+    // Ensure .gitignore covers .env
+    const gi = path.join(ROOT, '.gitignore')
+    if (fs.existsSync(gi) && !fs.readFileSync(gi, 'utf-8').includes('.env')) {
+      fs.appendFileSync(gi, '\n.env\n')
+    }
+    return { success: true }
+  } catch (err: unknown) {
+    return { success: false, error: (err as Error).message }
+  }
+})
+
+// ── AI Config: remove provider key ───────────────────────────────────────────
+ipcMain.handle('ai:remove-provider-key', async (_, provider: string) => {
+  let output = ''
+  const code = await spawnCLI(['ai', 'key', 'remove', '--provider', provider], (msg) => { output += msg })
+  return { success: code === 0, output }
+})
+
+// ── AI Config: set agent profile ──────────────────────────────────────────────
+ipcMain.handle('ai:set-agent-profile', async (_, purpose: string, provider: string, model: string) => {
+  let output = ''
+  const code = await spawnCLI(
+    ['ai', 'profile', 'set', '--agent', purpose, '--provider', provider, '--model', model],
+    (msg) => { output += msg },
+  )
+  return { success: code === 0, output }
+})
+
+// ── AI: test provider ─────────────────────────────────────────────────────────
+ipcMain.handle('ai:test-provider', async (_, provider: string, model: string) => {
+  let output = ''
+  const code = await spawnCLI(['ai', 'test', '--provider', provider, '--model', model], (msg) => { output += msg })
+  return { success: code === 0, output }
+})
+
+// ── Usage: get summary ────────────────────────────────────────────────────────
+ipcMain.handle('usage:get-summary', async () => {
+  try {
+    const usagePath = path.join(ROOT, '.qwen-agent', 'usage', 'token-usage.json')
+    if (!fs.existsSync(usagePath)) {
+      return { success: true, summary: { totalRecords: 0, totalInputTokens: 0, totalOutputTokens: 0, totalTokens: 0, totalEstimatedCost: null, byProvider: {}, byModel: {} } }
+    }
+    const records = JSON.parse(fs.readFileSync(usagePath, 'utf-8')) as Array<{
+      providerId: string; model: string; inputTokens: number; outputTokens: number; totalTokens: number; estimatedCost: number | null
+    }>
+    const byProvider: Record<string, { inputTokens: number; outputTokens: number; totalTokens: number; estimatedCost: number | null; calls: number }> = {}
+    const byModel: Record<string, { inputTokens: number; outputTokens: number; totalTokens: number; estimatedCost: number | null; calls: number }> = {}
+    let totalInput = 0, totalOutput = 0, totalCost = 0, hasCost = false
+    for (const r of records) {
+      totalInput += r.inputTokens; totalOutput += r.outputTokens
+      if (r.estimatedCost !== null) { totalCost += r.estimatedCost; hasCost = true }
+      const p = byProvider[r.providerId] ??= { inputTokens: 0, outputTokens: 0, totalTokens: 0, estimatedCost: null, calls: 0 }
+      p.inputTokens += r.inputTokens; p.outputTokens += r.outputTokens; p.totalTokens += r.totalTokens
+      if (r.estimatedCost !== null) p.estimatedCost = (p.estimatedCost ?? 0) + r.estimatedCost
+      p.calls++
+      const mk = `${r.providerId}/${r.model}`
+      const m = byModel[mk] ??= { inputTokens: 0, outputTokens: 0, totalTokens: 0, estimatedCost: null, calls: 0 }
+      m.inputTokens += r.inputTokens; m.outputTokens += r.outputTokens; m.totalTokens += r.totalTokens
+      if (r.estimatedCost !== null) m.estimatedCost = (m.estimatedCost ?? 0) + r.estimatedCost
+      m.calls++
+    }
+    return {
+      success: true,
+      summary: {
+        totalRecords: records.length, totalInputTokens: totalInput, totalOutputTokens: totalOutput,
+        totalTokens: totalInput + totalOutput, totalEstimatedCost: hasCost ? totalCost : null,
+        byProvider, byModel,
+      },
+    }
+  } catch (err: unknown) {
+    return { success: false, error: (err as Error).message }
+  }
+})
+
+// ── Usage: clear ──────────────────────────────────────────────────────────────
+ipcMain.handle('usage:clear', async () => {
+  try {
+    const usagePath = path.join(ROOT, '.qwen-agent', 'usage', 'token-usage.json')
+    if (fs.existsSync(usagePath)) fs.writeFileSync(usagePath, '[]', 'utf-8')
+    return { success: true }
+  } catch (err: unknown) {
+    return { success: false, error: (err as Error).message }
+  }
+})

@@ -1,6 +1,8 @@
 import { runAgent, type AgentOptions } from '../../agent/agents/base.agent.js'
 import type { QwenMessage } from '../../services/api/qwen-provider.js'
 import type { AgentName, AgentResult } from './types.js'
+import { resolveProviderAndModel } from '../llm/modelRouter.js'
+import type { AgentPurpose } from '../llm/providers/types.js'
 
 export abstract class BaseAgent {
   protected readonly agentName: AgentName | string
@@ -9,8 +11,24 @@ export abstract class BaseAgent {
     this.agentName = agentName
   }
 
-  protected async callLLM(messages: QwenMessage[], options: AgentOptions): Promise<string> {
-    return runAgent(messages, options)
+  protected async callLLM(
+    messages: QwenMessage[],
+    options: AgentOptions & { purpose?: AgentPurpose; taskId?: string },
+  ): Promise<string> {
+    // Resolve provider/model via the model router
+    const { providerId, model } = resolveProviderAndModel(
+      options.modelOverride,
+      undefined,
+      options.purpose ?? (this.agentName as AgentPurpose | undefined),
+    )
+
+    return runAgent(messages, {
+      ...options,
+      agentName: this.agentName as string,
+      taskId: options.taskId,
+      providerId,
+      model,
+    })
   }
 
   protected log(message: string): void {

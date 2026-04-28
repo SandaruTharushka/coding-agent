@@ -50,6 +50,8 @@ export interface AgentMemory {
   }>
 }
 
+// ─── Legacy Qwen config (kept for backward compat) ────────────────────────────
+
 export interface QwenConfig {
   apiKey: string
   baseUrl: string
@@ -57,6 +59,57 @@ export interface QwenConfig {
   timeoutMs: number
   maxRetries: number
   maxTokens: number
+}
+
+// ─── Multi-provider AI config ─────────────────────────────────────────────────
+
+export type AgentPurpose = 'coordinator' | 'architect' | 'coder' | 'tester' | 'reviewer' | 'general'
+
+export interface ProviderStatus {
+  id: string
+  name: string
+  status: 'connected' | 'missing-key' | 'no-key-required'
+  maskedKey: string
+}
+
+export interface AgentModelProfile {
+  providerId: string
+  model: string
+  maxTokens?: number
+  temperature?: number
+}
+
+export interface AIConfig {
+  defaultProvider: string
+  defaultModel: string
+  providerStatuses: ProviderStatus[]
+  agentProfiles: Record<AgentPurpose, AgentModelProfile>
+  maxTokens: number
+  timeoutMs: number
+  maxRetries: number
+  stream: boolean
+}
+
+export interface UsageSummary {
+  totalRecords: number
+  totalInputTokens: number
+  totalOutputTokens: number
+  totalTokens: number
+  totalEstimatedCost: number | null
+  byProvider: Record<string, {
+    inputTokens: number
+    outputTokens: number
+    totalTokens: number
+    estimatedCost: number | null
+    calls: number
+  }>
+  byModel: Record<string, {
+    inputTokens: number
+    outputTokens: number
+    totalTokens: number
+    estimatedCost: number | null
+    calls: number
+  }>
 }
 
 export interface ProgressEvent {
@@ -86,8 +139,18 @@ declare global {
       getGitStatus: () => Promise<GitStatus>
       commitChanges: (message: string) => Promise<{ success: boolean; output?: string; error?: string }>
       getMemory: () => Promise<{ success: boolean; memory?: AgentMemory; error?: string }>
+      // Legacy Qwen config
       getQwenConfig: () => Promise<{ success: boolean; config?: QwenConfig; error?: string }>
       updateQwenConfig: (config: Partial<QwenConfig>) => Promise<{ success: boolean; error?: string }>
+      // Multi-provider AI config
+      getAIConfig: () => Promise<{ success: boolean; config?: AIConfig; error?: string }>
+      setAIDefault: (provider: string, model: string) => Promise<{ success: boolean; error?: string }>
+      setProviderKey: (provider: string) => Promise<{ success: boolean; error?: string }>
+      removeProviderKey: (provider: string) => Promise<{ success: boolean; error?: string }>
+      setAgentProfile: (purpose: AgentPurpose, provider: string, model: string) => Promise<{ success: boolean; error?: string }>
+      testProvider: (provider: string, model: string) => Promise<{ success: boolean; latencyMs?: number; error?: string }>
+      getUsageSummary: () => Promise<{ success: boolean; summary?: UsageSummary; error?: string }>
+      clearUsage: () => Promise<{ success: boolean; error?: string }>
       onAgentProgress: (cb: (data: ProgressEvent) => void) => void
       onAgentComplete: (cb: (data: CompleteEvent) => void) => void
       removeAllListeners: (channel: string) => void
