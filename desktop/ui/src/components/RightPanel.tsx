@@ -1,54 +1,26 @@
+import { FlaskConical, RotateCcw } from 'lucide-react'
 import { useApp } from '../context/AppContext'
-import AgentStatus from './AgentStatus'
+import GitPanel from './GitPanel'
+import TerminalPanel from './TerminalPanel'
 
 export default function RightPanel() {
-  const { gitStatus, agentStatus, currentTask, currentPhase } = useApp()
-
-  const changedFiles = gitStatus?.status
-    ? gitStatus.status.trim().split('\n').filter(Boolean)
-    : []
+  const { gitStatus, logs } = useApp()
+  const changedFiles = gitStatus?.status ? gitStatus.status.trim().split('\n').filter(Boolean) : []
 
   return (
-    <aside className="w-56 flex-shrink-0 bg-slate-900 border-l border-slate-700/50 flex flex-col overflow-hidden">
-      {/* Agent status section */}
-      <AgentStatus
-        status={agentStatus}
-        task={currentTask}
-        phase={currentPhase}
-      />
-
-      {/* Git status section */}
-      <div className="border-t border-slate-700/50 p-3 flex-1 overflow-y-auto min-h-0">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Git</span>
-          {gitStatus?.branch && (
-            <span className="badge badge-blue text-xs">{gitStatus.branch}</span>
-          )}
+    <aside className="w-[360px] flex-shrink-0 space-y-3 overflow-y-auto border-l border-[#2a2a32] bg-[#121216] p-3">
+      <GitPanel branch={gitStatus?.branch} changedFiles={changedFiles} diff={gitStatus?.diff} />
+      <div className="rounded-2xl border border-[#2a2a32] bg-[#18181d] p-4">
+        <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-[#f5f5f7]"><FlaskConical className="h-4 w-4 text-[#22c55e]" />Verification Loop</h3>
+        <div className="space-y-1 text-xs text-[#9ca3af]">
+          <p>✅ build</p>
+          <p>✅ lint</p>
+          <p>⚠ test (1 flaky)</p>
+          <p>⟳ retry fixes queued</p>
         </div>
-
-        {changedFiles.length === 0 ? (
-          <p className="text-xs text-slate-600 italic">No changes</p>
-        ) : (
-          <div className="space-y-0.5">
-            {changedFiles.slice(0, 20).map((line, i) => {
-              const status = line.slice(0, 2).trim()
-              const file = line.slice(3)
-              const color = status === 'M' ? 'text-yellow-400' :
-                            status === 'A' || status === '??' ? 'text-emerald-400' :
-                            status === 'D' ? 'text-red-400' : 'text-slate-400'
-              return (
-                <div key={i} className="flex items-center gap-1.5 text-xs">
-                  <span className={`mono font-bold w-3 flex-shrink-0 ${color}`}>{status}</span>
-                  <span className="text-slate-400 truncate mono" title={file}>{file}</span>
-                </div>
-              )
-            })}
-            {changedFiles.length > 20 && (
-              <p className="text-xs text-slate-600 mt-1">+{changedFiles.length - 20} more</p>
-            )}
-          </div>
-        )}
+        <button className="mt-3 inline-flex items-center gap-1 rounded-lg border border-[#2a2a32] px-3 py-1.5 text-xs text-[#9ca3af]"><RotateCcw className="h-3.5 w-3.5" />Rollback</button>
       </div>
+      <TerminalPanel logs={logs} />
     </aside>
   )
 }

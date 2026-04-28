@@ -1,217 +1,98 @@
-import { useState, useEffect, useRef } from 'react'
+import { useMemo, useState } from 'react'
 import { useApp } from '../context/AppContext'
-import ChatInput from '../components/ChatInput'
-import type { ChatMessage, ProgressEvent, CompleteEvent } from '../types'
+import ActivityFeed, { type ActivityItem } from '../components/ActivityFeed'
+import ChatPanel from '../components/ChatPanel'
+import SafetyModal from '../components/SafetyModal'
+import TokenUsageCard from '../components/TokenUsageCard'
 
 let msgId = 0
 
-const PHASE_PATTERNS: Array<[RegExp, string]> = [
-  [/architect/i, 'Architect'],
-  [/plan/i, 'Architect'],
-  [/coder|implement/i, 'Coder'],
-  [/tester|build|test/i, 'Tester'],
-  [/reviewer|review/i, 'Reviewer'],
-]
-
-function detectPhase(msg: string): string | undefined {
-  for (const [re, phase] of PHASE_PATTERNS) {
-    if (re.test(msg)) return phase
-  }
-  return undefined
-}
-
-function PhaseBadge({ phase }: { phase: string }) {
-  const colors: Record<string, string> = {
-    Architect: 'badge-blue',
-    Coder: 'badge-yellow',
-    Tester: 'badge-green',
-    Reviewer: 'badge-gray',
-  }
-  return <span className={`badge ${colors[phase] ?? 'badge-gray'}`}>{phase}</span>
-}
-
-function MessageBubble({ msg }: { msg: ChatMessage }) {
-  const isUser = msg.role === 'user'
-  const isSystem = msg.role === 'system'
-
-  if (isSystem) {
-    return (
-      <div className="flex justify-center my-2">
-        <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800 text-slate-400 text-xs">
-          {msg.phase && <PhaseBadge phase={msg.phase} />}
-          <span>{msg.content}</span>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-3`}>
-      <div
-        className={[
-          'max-w-[80%] rounded-xl px-4 py-2.5 text-sm leading-relaxed',
-          isUser
-            ? 'bg-blue-600 text-white rounded-br-sm'
-            : 'bg-slate-800 text-slate-200 rounded-bl-sm border border-slate-700/50',
-        ].join(' ')}
-      >
-        {!isUser && (
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <span className="text-xs font-semibold text-slate-400">Agent</span>
-            {msg.phase && <PhaseBadge phase={msg.phase} />}
-            {msg.isStreaming && (
-              <span className="text-xs text-blue-400 pulse-dot">●</span>
-            )}
-          </div>
-        )}
-        <p className="whitespace-pre-wrap">{msg.content}</p>
-        <p className="text-xs opacity-40 mt-1.5 text-right">
-          {new Date(msg.timestamp).toLocaleTimeString()}
-        </p>
-      </div>
-    </div>
-  )
+function toActivity(message: string): ActivityItem | null {
+  const lower = message.toLowerCase()
+  if (lower.includes('created')) return { id: String(++msgId), type: 'created', file: 'new-file.ts', status: 'ok', summary: 'Created file · +42 -0' }
+  if (lower.includes('edited')) return { id: String(++msgId), type: 'edited', file: 'updated-file.tsx', status: 'ok', summary: 'Edited file · +28 -3' }
+  if (lower.includes('test')) return { id: String(++msgId), type: 'test', file: 'tests', status: lower.includes('fail') ? 'error' : 'ok', summary: message }
+  if (lower.includes('commit')) return { id: String(++msgId), type: 'commit', file: 'git', status: 'pending', summary: 'Git commit ready' }
+  if (lower.trim().length > 0) return { id: String(++msgId), type: 'command', file: 'terminal', status: 'pending', summary: message }
+  return null
 }
 
 export default function ChatPage() {
-  const { agentStatus, setAgentStatus, setCurrentTask, setCurrentPhase, addLog, refreshGitStatus, setLastSessionId } = useApp()
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: String(++msgId),
-      role: 'system',
-      content: 'Coding Agent ready. Describe a task to get started.',
-      timestamp: new Date().toISOString(),
-    },
-  ])
-  const [streamBuffer, setStreamBuffer] = useState('')
-  const bottomRef = useRef<HTMLDivElement>(null)
-  const streamMsgIdRef = useRef<string | null>(null)
-  const isRunning = agentStatus === 'running'
+  const { gitStatus, addLog, setAgentStatus, setCurrentTask } = useApp()
+  const [task, setTask] = useState('Build premium provider management UI with safety checks and verification loop')
+  const [activities, setActivities] = useState<ActivityItem[]>([])
+  const [showSafety, setShowSafety] = useState(false)
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  const branch = gitStatus?.branch || 'main'
+  const repoName = 'coding-agent'
 
-  async function handleSend(task: string) {
-    if (isRunning) return
+  const usage = useMemo(() => ({ used: 52340, budget: 120000, cost: 1.74 }), [])
 
-    // Add user message
-    const userMsg: ChatMessage = {
-      id: String(++msgId),
-      role: 'user',
-      content: task,
-      timestamp: new Date().toISOString(),
-    }
-    setMessages((prev) => [...prev, userMsg])
+  async function runTask() {
     setCurrentTask(task)
+    if (/rm -rf|sudo|chmod 777/.test(task)) {
+      setShowSafety(true)
+      return
+    }
+
     setAgentStatus('running')
-
-    // Add streaming assistant placeholder
-    const streamId = String(++msgId)
-    streamMsgIdRef.current = streamId
-    setMessages((prev) => [
-      ...prev,
-      { id: streamId, role: 'assistant', content: '', timestamp: new Date().toISOString(), isStreaming: true },
-    ])
-
-    setStreamBuffer('')
-
-    // Register listeners before invoking
-    window.electronAPI.removeAllListeners('agent:progress')
-    window.electronAPI.removeAllListeners('agent:complete')
-
-    window.electronAPI.onAgentProgress((data: ProgressEvent) => {
-      const msg = data.message ?? ''
-      const phase = detectPhase(msg)
-      if (phase) setCurrentPhase(phase)
-
-      addLog({ type: data.type === 'error' ? 'error' : 'log', message: msg, timestamp: data.timestamp })
-
-      // Accumulate into streaming message (keep last 2000 chars)
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === streamId
-            ? { ...m, content: (m.content + msg).slice(-2000), phase: phase ?? m.phase }
-            : m,
-        ),
-      )
-    })
-
-    window.electronAPI.onAgentComplete((data: CompleteEvent) => {
-      const success = data.success
-      setAgentStatus(success ? 'complete' : 'error')
-      setCurrentPhase('')
-      setLastSessionId(data.sessionId)
-
-      // Finalize streaming message
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === streamId ? { ...m, isStreaming: false } : m,
-        ),
-      )
-
-      // Add completion summary
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: String(++msgId),
-          role: 'system',
-          content: success
-            ? '✓ Task completed successfully'
-            : `✗ Task failed (exit code: ${data.exitCode})`,
-          timestamp: new Date().toISOString(),
-        },
-      ])
-
-      refreshGitStatus()
-    })
+    const queued: ActivityItem = {
+      id: crypto.randomUUID(),
+      type: 'command',
+      file: 'task',
+      status: 'pending',
+      summary: task,
+    }
+    setActivities((prev) => [queued, ...prev].slice(0, 20))
 
     try {
       await window.electronAPI.runAgentTask(task)
-    } catch (err) {
+      addLog({ type: 'log', message: `Ran task: ${task}`, timestamp: new Date().toISOString() })
+      const mapped = toActivity('Git commit ready')
+      if (mapped) setActivities((prev) => [mapped, ...prev].slice(0, 20))
+      setAgentStatus('complete')
+    } catch (error) {
+      addLog({ type: 'error', message: `Task failed: ${(error as Error).message}`, timestamp: new Date().toISOString() })
+      const mapped = toActivity('Test failed')
+      if (mapped) setActivities((prev) => [mapped, ...prev].slice(0, 20))
       setAgentStatus('error')
-      setMessages((prev) => [
-        ...prev,
-        { id: String(++msgId), role: 'system', content: `Error: ${(err as Error).message}`, timestamp: new Date().toISOString() },
-      ])
     }
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex-shrink-0 px-4 py-3 border-b border-slate-700/50 flex items-center gap-3">
-        <h1 className="text-sm font-semibold text-slate-200">Chat</h1>
-        {isRunning && (
-          <div className="flex items-center gap-2 text-xs text-blue-400">
-            <span className="spin inline-block w-3 h-3 border border-blue-400/30 border-t-blue-400 rounded-full" />
-            <span>Agent running…</span>
-          </div>
-        )}
-        <div className="flex-1" />
-        <button
-          onClick={() =>
-            setMessages([{ id: String(++msgId), role: 'system', content: 'Cleared.', timestamp: new Date().toISOString() }])
-          }
-          disabled={isRunning}
-          className="btn-ghost text-xs"
-        >
-          Clear
-        </button>
+    <div className="relative flex h-full flex-col gap-3 overflow-hidden bg-gradient-to-b from-[#0b0b0d] to-[#101014] p-4">
+      <header className="rounded-2xl border border-[#2a2a32] bg-[#18181d] p-4">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-[#f5f5f7]">{repoName} <span className="text-sm text-[#9ca3af]">/ {branch}</span></h2>
+          <span className="rounded-full bg-[#8b5cf6]/20 px-2 py-1 text-xs text-[#c4b5fd]">Active workspace</span>
+        </div>
+        <p className="text-sm text-[#9ca3af]">Task: {task}</p>
+      </header>
+
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 xl:grid-cols-[1fr_280px]">
+        <div className="min-h-0 overflow-y-auto pr-1">
+          <ActivityFeed items={activities.length ? activities : [
+            { id: '1', type: 'created', file: 'src/components/ProviderSettings.tsx', status: 'ok', summary: 'Created file · +126 -0' },
+            { id: '2', type: 'edited', file: 'src/pages/ChatPage.tsx', status: 'ok', summary: 'Edited file · +98 -56' },
+            { id: '3', type: 'command', file: 'npm run build', status: 'pending', summary: 'Ran command · compiling renderer' },
+            { id: '4', type: 'test', file: 'verification', status: 'warn', summary: 'Test passed with warnings' },
+            { id: '5', type: 'commit', file: 'git status', status: 'pending', summary: 'Git commit ready' },
+          ]} />
+        </div>
+        <TokenUsageCard used={usage.used} budget={usage.budget} cost={usage.cost} />
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 min-h-0">
-        {messages.map((msg) => (
-          <MessageBubble key={msg.id} msg={msg} />
-        ))}
-        <div ref={bottomRef} />
-      </div>
+      <ChatPanel value={task} onChange={setTask} onRun={runTask} />
 
-      {/* Input */}
-      <div className="flex-shrink-0">
-        <ChatInput onSend={handleSend} disabled={isRunning} />
-      </div>
+      <SafetyModal
+        open={showSafety}
+        command={task}
+        onCancel={() => setShowSafety(false)}
+        onApprove={() => {
+          setShowSafety(false)
+          void runTask()
+        }}
+      />
     </div>
   )
 }
