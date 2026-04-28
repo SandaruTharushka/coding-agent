@@ -1,13 +1,20 @@
 /**
- * Qwen configuration — backward-compatible wrapper around the unified aiConfig.
+ * Centralized Qwen configuration loader.
  *
- * All existing code that imports from qwenConfig continues to work unchanged.
- * New code should import from aiConfig directly.
+ * All other modules must obtain Qwen settings exclusively through this module.
+ * Never read QWEN_* env vars directly elsewhere.
  */
 
-import * as fs from 'fs'
-import * as path from 'path'
-import { loadAIConfig, maskApiKey as maskKey } from './aiConfig.js'
+// ─── Defaults ─────────────────────────────────────────────────────────────────
+
+const DEFAULTS = {
+  baseUrl: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
+  model: 'qwen-plus',
+  timeoutMs: 60_000,
+  maxRetries: 3,
+  maxTokens: 8192,
+  stream: true,
+} as const
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -29,6 +36,9 @@ export interface QwenConfigValidation {
 
 // ─── .env loader ─────────────────────────────────────────────────────────────
 
+import * as fs from 'fs'
+import * as path from 'path'
+
 /**
  * Load a .env file into process.env. Safe to call multiple times (idempotent).
  * Existing env vars are NOT overwritten (shell env takes priority).
@@ -40,14 +50,17 @@ export function loadDotEnv(filePath = '.env'): void {
   for (const raw of lines) {
     const line = raw.trim()
     if (!line || line.startsWith('#')) continue
+    // Strip optional "export " prefix
     const stripped = line.startsWith('export ') ? line.slice(7) : line
     const eq = stripped.indexOf('=')
     if (eq === -1) continue
     const key = stripped.slice(0, eq).trim()
     let val = stripped.slice(eq + 1).trim()
+    // Strip surrounding quotes
     if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
       val = val.slice(1, -1)
     }
+    // Remove inline comments (e.g. value # comment)
     const commentIdx = val.indexOf(' #')
     if (commentIdx !== -1) val = val.slice(0, commentIdx).trim()
     if (key && !process.env[key]) {
@@ -58,25 +71,32 @@ export function loadDotEnv(filePath = '.env'): void {
 
 // ─── Config loader ────────────────────────────────────────────────────────────
 
+/**
+ * Read and return the Qwen configuration from environment variables.
+ * Call loadDotEnv() before this if you need .env support.
+ */
 export function loadQwenConfig(): QwenConfig {
-  const ai = loadAIConfig()
-  const qwenKey = ai.providerApiKeys['qwen'] ?? ''
-  const qwenUrl = ai.providerBaseUrls['qwen'] ?? 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1'
-
-  // Use default model only if it's a qwen model, otherwise fall back to qwen-plus
-  const isQwenModel = ai.defaultProvider === 'qwen' ||
-    ai.defaultModel.startsWith('qwen')
-  const model = isQwenModel ? ai.defaultModel : (process.env.QWEN_MODEL ?? 'qwen-plus')
-
   return {
-    apiKey: qwenKey,
-    baseUrl: qwenUrl,
-    model,
-    timeoutMs: ai.timeoutMs,
-    maxRetries: ai.maxRetries,
-    maxTokens: ai.maxTokens,
-    stream: ai.stream,
+    apiKey: process.env.QWEN_API_KEY ?? '',
+    baseUrl: process.env.QWEN_BASE_URL ?? DEFAULTS.baseUrl,
+    model: process.env.QWEN_MODEL ?? DEFAULTS.model,
+    timeoutMs: parsePositiveInt(process.env.QWEN_TIMEOUT_MS, DEFAULTS.timeoutMs),
+    maxRetries: parseNonNegativeInt(process.env.QWEN_MAX_RETRIES, DEFAULTS.maxRetries),
+    maxTokens: parsePositiveInt(process.env.QWEN_MAX_TOKENS, DEFAULTS.maxTokens),
+    stream: process.env.QWEN_STREAM !== 'false',
   }
+}
+
+function parsePositiveInt(raw: string | undefined, fallback: number): number {
+  if (raw === undefined) return fallback
+  const n = parseInt(raw, 10)
+  return Number.isFinite(n) && n > 0 ? n : fallback
+}
+
+function parseNonNegativeInt(raw: string | undefined, fallback: number): number {
+  if (raw === undefined) return fallback
+  const n = parseInt(raw, 10)
+  return Number.isFinite(n) && n >= 0 ? n : fallback
 }
 
 // ─── Validation ───────────────────────────────────────────────────────────────
@@ -107,7 +127,9 @@ export function validateQwenConfig(config: QwenConfig): QwenConfigValidation {
 // ─── Display helpers ──────────────────────────────────────────────────────────
 
 export function maskApiKey(key: string): string {
-  return maskKey(key)
+  if (!key) return '(not set)'
+  if (key.length <= 8) return '****'
+  return `${key.slice(0, 4)}****${key.slice(-4)}`
 }
 
 export function configToDisplayRows(config: QwenConfig): Array<[string, string]> {

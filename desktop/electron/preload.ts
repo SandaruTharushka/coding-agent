@@ -43,38 +43,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getMemory: () =>
     ipcRenderer.invoke('memory:get'),
 
-  // ── Config (legacy Qwen) ───────────────────────────────────────────────────
+  // ── Config ─────────────────────────────────────────────────────────────────
   getQwenConfig: () =>
     ipcRenderer.invoke('config:get'),
 
   updateQwenConfig: (config: Record<string, unknown>) =>
     ipcRenderer.invoke('config:update', config),
-
-  // ── AI Config (multi-provider) ─────────────────────────────────────────────
-  getAIConfig: () =>
-    ipcRenderer.invoke('ai:get-config'),
-
-  setAIDefault: (provider: string, model: string) =>
-    ipcRenderer.invoke('ai:set-default', provider, model),
-
-  setProviderKey: (provider: string, apiKey: string) =>
-    ipcRenderer.invoke('ai:set-provider-key', provider, apiKey),
-
-  removeProviderKey: (provider: string) =>
-    ipcRenderer.invoke('ai:remove-provider-key', provider),
-
-  setAgentProfile: (purpose: string, provider: string, model: string) =>
-    ipcRenderer.invoke('ai:set-agent-profile', purpose, provider, model),
-
-  testProvider: (provider: string, model: string) =>
-    ipcRenderer.invoke('ai:test-provider', provider, model),
-
-  // ── Usage ──────────────────────────────────────────────────────────────────
-  getUsageSummary: () =>
-    ipcRenderer.invoke('usage:get-summary'),
-
-  clearUsage: () =>
-    ipcRenderer.invoke('usage:clear'),
 
   // ── Streaming event listeners ──────────────────────────────────────────────
   onAgentProgress: (cb: (data: unknown) => void) => {
