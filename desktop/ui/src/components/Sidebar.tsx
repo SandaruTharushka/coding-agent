@@ -21,9 +21,9 @@ export default function Sidebar() {
   const { activePage, setActivePage, agentStatus } = useApp()
 
   return (
-    <aside className="w-14 flex-shrink-0 bg-slate-900 border-r border-slate-700/50 flex flex-col items-center py-3 gap-1">
+    <aside className="w-14 flex-shrink-0 bg-cc-sidebar border-r border-cc-border flex flex-col items-center py-3 gap-1">
       {/* Logo */}
-      <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center mb-4 flex-shrink-0">
+      <div className="w-8 h-8 rounded-lg bg-cc-accent flex items-center justify-center mb-4 flex-shrink-0">
         <span className="text-white text-xs font-bold">CA</span>
       </div>
 
@@ -64,16 +64,16 @@ function NavButton({
       className={[
         'relative w-10 h-10 rounded-lg flex items-center justify-center text-lg transition-all duration-150',
         active
-          ? 'bg-blue-600/20 text-blue-400'
-          : 'text-slate-500 hover:text-slate-300 hover:bg-slate-700/50',
+          ? 'bg-cc-accent-bg text-cc-accent'
+          : 'text-cc-subtle hover:text-cc-muted hover:bg-cc-surface',
       ].join(' ')}
     >
       {item.icon}
       {active && (
-        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-blue-500 rounded-r" />
+        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-cc-accent rounded-r" />
       )}
       {agentRunning && (
-        <div className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-blue-400 pulse-dot" />
+        <div className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-cc-accent pulse-dot" />
       )}
     </button>
   )
@@ -81,15 +81,15 @@ function NavButton({
 
 function StatusDot({ status }: { status: string }) {
   const colors: Record<string, string> = {
-    idle: 'bg-slate-600',
-    running: 'bg-blue-400 pulse-dot',
-    complete: 'bg-emerald-400',
-    error: 'bg-red-400',
+    idle: 'bg-cc-subtle',
+    running: 'bg-cc-accent pulse-dot',
+    complete: 'bg-cc-success',
+    error: 'bg-cc-error',
   }
   return (
     <div
       title={`Agent: ${status}`}
-      className={`w-2 h-2 rounded-full mb-1 ${colors[status] ?? 'bg-slate-600'}`}
+      className={`w-2 h-2 rounded-full mb-1 ${colors[status] ?? 'bg-cc-subtle'}`}
     />
   )
 }

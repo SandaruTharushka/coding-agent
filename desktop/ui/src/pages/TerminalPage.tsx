@@ -44,8 +44,8 @@ export default function TerminalPage() {
   return (
     <div className="flex flex-col h-full">
       {/* Header toolbar */}
-      <div className="flex-shrink-0 px-4 py-2.5 border-b border-slate-700/50 flex items-center gap-2">
-        <h1 className="text-sm font-semibold text-slate-200">Terminal</h1>
+      <div className="flex-shrink-0 px-4 py-2.5 border-b border-cc-border flex items-center gap-2">
+        <h1 className="text-sm font-semibold text-cc-text">Terminal</h1>
 
         {/* Filters */}
         <div className="flex gap-1 ml-3">
@@ -55,7 +55,7 @@ export default function TerminalPage() {
               onClick={() => setFilter(f)}
               className={[
                 'btn text-xs px-2 py-0.5',
-                filter === f ? 'bg-slate-700 text-slate-200' : 'text-slate-500 hover:text-slate-300',
+                filter === f ? 'bg-cc-surface2 text-cc-text' : 'text-cc-subtle hover:text-cc-muted',
               ].join(' ')}
             >
               {f === 'all' ? `All (${logs.length})` :
@@ -69,7 +69,7 @@ export default function TerminalPage() {
 
         <button
           onClick={() => setAutoScroll((v) => !v)}
-          className={`btn-ghost text-xs ${autoScroll ? 'text-blue-400' : ''}`}
+          className={`btn-ghost text-xs ${autoScroll ? 'text-cc-accent' : ''}`}
         >
           {autoScroll ? '⬇ Auto-scroll' : 'Auto-scroll'}
         </button>
@@ -93,18 +93,18 @@ export default function TerminalPage() {
       </div>
 
       {/* Log output */}
-      <div className="flex-1 min-h-0 bg-slate-950">
+      <div className="flex-1 min-h-0 bg-cc-bg">
         <TerminalOutput logs={filtered} autoScroll={autoScroll} />
       </div>
 
       {/* Shell safety legend */}
-      <div className="flex-shrink-0 border-t border-slate-700/50 bg-slate-900/50 px-4 py-2">
-        <p className="text-xs text-slate-500 mb-1.5 font-medium">Shell Safety</p>
+      <div className="flex-shrink-0 border-t border-cc-border bg-cc-sidebar/50 px-4 py-2">
+        <p className="text-xs text-cc-muted mb-1.5 font-medium">Shell Safety</p>
         <div className="flex gap-4 flex-wrap">
           {SHELL_RISK_NOTES.map((note) => (
             <div key={note.badge} className="flex items-center gap-1.5">
               <span className={`text-xs font-bold ${note.color}`}>{note.badge}</span>
-              <span className="text-xs text-slate-600">{note.desc}</span>
+              <span className="text-xs text-cc-subtle">{note.desc}</span>
             </div>
           ))}
         </div>

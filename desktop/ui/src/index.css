@@ -16,8 +16,8 @@
   }
 
   body {
-    background-color: #0f172a;
-    color: #e2e8f0;
+    background-color: #0a0a0a;
+    color: #f0f0f0;
     font-family: system-ui, -apple-system, sans-serif;
     font-size: 14px;
     -webkit-font-smoothing: antialiased;
@@ -33,18 +33,18 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    background: #334155;
+    background: #2a2a2a;
     border-radius: 3px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: #475569;
+    background: #3a3a3a;
   }
 }
 
 @layer components {
   .panel {
-    @apply bg-slate-900 border border-slate-700/50 rounded-lg;
+    @apply bg-cc-surface border border-cc-border rounded-lg;
   }
 
   .btn {
@@ -52,29 +52,29 @@
   }
 
   .btn-primary {
-    @apply btn bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply btn bg-cc-accent hover:bg-orange-500 text-white disabled:opacity-40 disabled:cursor-not-allowed;
   }
 
   .btn-ghost {
-    @apply btn text-slate-400 hover:text-slate-200 hover:bg-slate-700/50;
+    @apply btn text-cc-muted hover:text-cc-text hover:bg-cc-surface2;
   }
 
   .btn-danger {
-    @apply btn bg-red-600/20 hover:bg-red-600/40 text-red-400 border border-red-600/30;
+    @apply btn bg-red-950/50 hover:bg-red-900/60 text-cc-error border border-red-800/40;
   }
 
   .btn-success {
-    @apply btn bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 border border-emerald-600/30;
+    @apply btn bg-emerald-950/50 hover:bg-emerald-900/60 text-cc-success border border-emerald-800/40;
   }
 
   .input {
-    @apply w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-slate-200
-           placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30
+    @apply w-full bg-cc-surface border border-cc-border2 rounded px-3 py-2 text-cc-text
+           placeholder-cc-subtle focus:outline-none focus:border-cc-accent focus:ring-1 focus:ring-cc-accent/30
            text-sm transition-colors;
   }
 
   .label {
-    @apply block text-xs font-medium text-slate-400 mb-1.5;
+    @apply block text-xs font-medium text-cc-muted mb-1.5;
   }
 
   .badge {
@@ -82,23 +82,23 @@
   }
 
   .badge-blue {
-    @apply badge bg-blue-500/20 text-blue-400 border border-blue-500/30;
+    @apply badge bg-blue-500/15 text-blue-400 border border-blue-500/25;
   }
 
   .badge-green {
-    @apply badge bg-emerald-500/20 text-emerald-400 border border-emerald-500/30;
+    @apply badge bg-emerald-500/15 text-emerald-400 border border-emerald-500/25;
   }
 
   .badge-red {
-    @apply badge bg-red-500/20 text-red-400 border border-red-500/30;
+    @apply badge bg-red-500/15 text-red-400 border border-red-500/25;
   }
 
   .badge-yellow {
-    @apply badge bg-yellow-500/20 text-yellow-400 border border-yellow-500/30;
+    @apply badge bg-yellow-500/15 text-yellow-400 border border-yellow-500/25;
   }
 
   .badge-gray {
-    @apply badge bg-slate-500/20 text-slate-400 border border-slate-500/30;
+    @apply badge bg-cc-surface2 text-cc-muted border border-cc-border2;
   }
 
   .mono {
@@ -110,15 +110,15 @@
   }
 
   .diff-add {
-    @apply bg-emerald-950/50 text-emerald-400 border-l-2 border-emerald-500;
+    @apply bg-emerald-950/60 text-emerald-400 border-l-2 border-emerald-600;
   }
 
   .diff-remove {
-    @apply bg-red-950/50 text-red-400 border-l-2 border-red-500;
+    @apply bg-red-950/60 text-red-400 border-l-2 border-red-600;
   }
 
   .diff-context {
-    @apply text-slate-500;
+    @apply text-cc-subtle;
   }
 }
 

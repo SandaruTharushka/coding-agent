@@ -79,8 +79,8 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full text-slate-500 text-sm">
-        <span className="spin inline-block w-4 h-4 border border-slate-600 border-t-slate-300 rounded-full mr-2" />
+      <div className="flex items-center justify-center h-full text-cc-muted text-sm">
+        <span className="spin inline-block w-4 h-4 border border-cc-border2 border-t-cc-muted rounded-full mr-2" />
         Loading config…
       </div>
     )
@@ -91,8 +91,8 @@ export default function SettingsPage() {
       <div className="max-w-xl mx-auto p-6 space-y-8">
         {/* Header */}
         <div>
-          <h1 className="text-lg font-semibold text-slate-200">Settings</h1>
-          <p className="text-sm text-slate-500 mt-1">Configure Qwen API connection and agent parameters</p>
+          <h1 className="text-lg font-semibold text-cc-text">Settings</h1>
+          <p className="text-sm text-cc-muted mt-1">Configure Qwen API connection and agent parameters</p>
         </div>
 
         {message && (
@@ -108,7 +108,7 @@ export default function SettingsPage() {
 
         {/* API section */}
         <div className="panel p-4 space-y-4">
-          <h2 className="text-sm font-semibold text-slate-300 border-b border-slate-700/50 pb-2">API Configuration</h2>
+          <h2 className="text-sm font-semibold text-cc-text border-b border-cc-border pb-2">API Configuration</h2>
 
           <Field
             label="API Key"
@@ -161,7 +161,7 @@ export default function SettingsPage() {
 
         {/* Limits section */}
         <div className="panel p-4 space-y-4">
-          <h2 className="text-sm font-semibold text-slate-300 border-b border-slate-700/50 pb-2">Limits</h2>
+          <h2 className="text-sm font-semibold text-cc-text border-b border-cc-border pb-2">Limits</h2>
 
           <Field label={`Timeout (ms): ${config.timeoutMs ?? 60000}`}>
             <input
@@ -173,7 +173,7 @@ export default function SettingsPage() {
               onChange={(e) => update('timeoutMs', parseInt(e.target.value))}
               className="w-full accent-blue-500"
             />
-            <div className="flex justify-between text-xs text-slate-600 mt-1">
+            <div className="flex justify-between text-xs text-cc-subtle mt-1">
               <span>5s</span><span>5min</span>
             </div>
           </Field>
@@ -186,9 +186,9 @@ export default function SettingsPage() {
               step={1}
               value={config.maxRetries ?? 3}
               onChange={(e) => update('maxRetries', parseInt(e.target.value))}
-              className="w-full accent-blue-500"
+              className="w-full accent-cc-accent"
             />
-            <div className="flex justify-between text-xs text-slate-600 mt-1">
+            <div className="flex justify-between text-xs text-cc-subtle mt-1">
               <span>0</span><span>10</span>
             </div>
           </Field>
@@ -201,9 +201,9 @@ export default function SettingsPage() {
               step={1024}
               value={config.maxTokens ?? 8192}
               onChange={(e) => update('maxTokens', parseInt(e.target.value))}
-              className="w-full accent-blue-500"
+              className="w-full accent-cc-accent"
             />
-            <div className="flex justify-between text-xs text-slate-600 mt-1">
+            <div className="flex justify-between text-xs text-cc-subtle mt-1">
               <span>1K</span><span>32K</span>
             </div>
           </Field>
@@ -227,10 +227,10 @@ export default function SettingsPage() {
         </div>
 
         {/* Safety note */}
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
-          <p className="text-xs text-slate-500 leading-relaxed">
-            <span className="text-yellow-400 font-semibold">Security: </span>
-            The API key is stored in the project <code className="mono text-slate-400">.env</code> file.
+        <div className="bg-cc-surface border border-cc-border rounded-lg p-3">
+          <p className="text-xs text-cc-muted leading-relaxed">
+            <span className="text-cc-warning font-semibold">Security: </span>
+            The API key is stored in the project <code className="mono text-cc-muted">.env</code> file.
             It is never shown in plaintext after saving, and the desktop UI never exposes raw Node.js
             file APIs to the renderer process.
           </p>

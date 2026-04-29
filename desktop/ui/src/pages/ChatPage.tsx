@@ -37,7 +37,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
   if (isSystem) {
     return (
       <div className="flex justify-center my-2">
-        <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800 text-slate-400 text-xs">
+        <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-cc-surface text-cc-muted text-xs border border-cc-border">
           {msg.phase && <PhaseBadge phase={msg.phase} />}
           <span>{msg.content}</span>
         </div>
@@ -51,16 +51,16 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
         className={[
           'max-w-[80%] rounded-xl px-4 py-2.5 text-sm leading-relaxed',
           isUser
-            ? 'bg-blue-600 text-white rounded-br-sm'
-            : 'bg-slate-800 text-slate-200 rounded-bl-sm border border-slate-700/50',
+            ? 'bg-cc-accent text-white rounded-br-sm'
+            : 'bg-cc-surface text-cc-text rounded-bl-sm border border-cc-border',
         ].join(' ')}
       >
         {!isUser && (
           <div className="flex items-center gap-1.5 mb-1.5">
-            <span className="text-xs font-semibold text-slate-400">Agent</span>
+            <span className="text-xs font-semibold text-cc-muted">Agent</span>
             {msg.phase && <PhaseBadge phase={msg.phase} />}
             {msg.isStreaming && (
-              <span className="text-xs text-blue-400 pulse-dot">●</span>
+              <span className="text-xs text-cc-accent pulse-dot">●</span>
             )}
           </div>
         )}
@@ -180,11 +180,11 @@ export default function ChatPage() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex-shrink-0 px-4 py-3 border-b border-slate-700/50 flex items-center gap-3">
-        <h1 className="text-sm font-semibold text-slate-200">Chat</h1>
+      <div className="flex-shrink-0 px-4 py-3 border-b border-cc-border flex items-center gap-3">
+        <h1 className="text-sm font-semibold text-cc-text">Chat</h1>
         {isRunning && (
-          <div className="flex items-center gap-2 text-xs text-blue-400">
-            <span className="spin inline-block w-3 h-3 border border-blue-400/30 border-t-blue-400 rounded-full" />
+          <div className="flex items-center gap-2 text-xs text-cc-accent">
+            <span className="spin inline-block w-3 h-3 border border-cc-accent/30 border-t-cc-accent rounded-full" />
             <span>Agent running…</span>
           </div>
         )}
