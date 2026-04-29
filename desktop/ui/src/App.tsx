@@ -19,7 +19,7 @@ function AppShell() {
   }, [refreshGitStatus])
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-slate-950 text-slate-200">
+    <div className="flex h-screen w-screen overflow-hidden bg-cc-bg text-cc-text">
       {/* Left sidebar */}
       <Sidebar />
 

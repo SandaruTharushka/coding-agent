@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState } from 'react'
 import type { FileNode } from '../types'
 
 interface Props {
@@ -38,13 +38,13 @@ function FileItem({
       <div>
         <button
           onClick={() => setExpanded((v) => !v)}
-          className="flex items-center gap-1.5 w-full text-left py-0.5 px-2 rounded hover:bg-slate-700/40 text-slate-300 text-xs"
+          className="flex items-center gap-1.5 w-full text-left py-0.5 px-2 rounded hover:bg-cc-surface text-cc-muted text-xs"
           style={{ paddingLeft: `${8 + depth * 14}px` }}
         >
-          <span className="text-slate-500 w-3 text-center flex-shrink-0">
+          <span className="text-cc-subtle w-3 text-center flex-shrink-0">
             {expanded ? '▾' : '▸'}
           </span>
-          <span className="text-slate-500 flex-shrink-0">📂</span>
+          <span className="text-cc-subtle flex-shrink-0">📂</span>
           <span className="truncate font-medium">{node.name}</span>
         </button>
         {expanded && node.children?.map((child) => (
@@ -67,8 +67,8 @@ function FileItem({
       className={[
         'flex items-center gap-1.5 w-full text-left py-0.5 rounded text-xs transition-colors',
         isSelected
-          ? 'bg-blue-600/20 text-blue-300'
-          : 'text-slate-400 hover:bg-slate-700/40 hover:text-slate-300',
+          ? 'bg-cc-accent-bg text-cc-accent'
+          : 'text-cc-subtle hover:bg-cc-surface hover:text-cc-muted',
       ].join(' ')}
       style={{ paddingLeft: `${8 + depth * 14 + 12}px`, paddingRight: '8px' }}
     >
@@ -81,8 +81,8 @@ function FileItem({
 export default function FileExplorer({ files, selectedPath, onSelect, loading }: Props) {
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-32 text-slate-500 text-sm">
-        <span className="spin inline-block w-4 h-4 border border-slate-600 border-t-slate-300 rounded-full mr-2" />
+      <div className="flex items-center justify-center h-32 text-cc-muted text-sm">
+        <span className="spin inline-block w-4 h-4 border border-cc-border2 border-t-cc-muted rounded-full mr-2" />
         Loading files…
       </div>
     )
@@ -90,7 +90,7 @@ export default function FileExplorer({ files, selectedPath, onSelect, loading }:
 
   if (files.length === 0) {
     return (
-      <div className="flex items-center justify-center h-32 text-slate-600 text-sm">
+      <div className="flex items-center justify-center h-32 text-cc-subtle text-sm">
         No files found
       </div>
     )

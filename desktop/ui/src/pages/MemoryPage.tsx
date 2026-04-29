@@ -67,8 +67,8 @@ export default function MemoryPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full text-slate-500 text-sm">
-        <span className="spin inline-block w-4 h-4 border border-slate-600 border-t-slate-300 rounded-full mr-2" />
+      <div className="flex items-center justify-center h-full text-cc-muted text-sm">
+        <span className="spin inline-block w-4 h-4 border border-cc-border2 border-t-cc-muted rounded-full mr-2" />
         Loading memory…
       </div>
     )
@@ -88,11 +88,11 @@ export default function MemoryPage() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex-shrink-0 px-4 py-3 border-b border-slate-700/50">
+      <div className="flex-shrink-0 px-4 py-3 border-b border-cc-border">
         <div className="flex items-center gap-3 mb-3">
-          <h1 className="text-sm font-semibold text-slate-200">Memory</h1>
+          <h1 className="text-sm font-semibold text-cc-text">Memory</h1>
           {memory?.projectSummary && (
-            <span className="text-xs text-slate-500 truncate max-w-xs">{memory.projectSummary}</span>
+            <span className="text-xs text-cc-muted truncate max-w-xs">{memory.projectSummary}</span>
           )}
           <div className="flex-1" />
           <button onClick={loadMemory} className="btn-ghost text-xs">↺ Refresh</button>
@@ -120,7 +120,7 @@ export default function MemoryPage() {
                   onClick={() => setTab(t)}
                   className={[
                     'btn text-xs px-3 py-1',
-                    tab === t ? 'bg-slate-700 text-slate-200' : 'text-slate-500 hover:text-slate-300',
+                    tab === t ? 'bg-cc-surface2 text-cc-text' : 'text-cc-subtle hover:text-cc-muted',
                   ].join(' ')}
                 >
                   {t.charAt(0).toUpperCase() + t.slice(1)} ({count ?? 0})
@@ -143,12 +143,12 @@ export default function MemoryPage() {
                   <span className={`badge ${STATUS_COLORS[t.status] ?? 'badge-gray'} flex-shrink-0 mt-0.5`}>
                     {t.status}
                   </span>
-                  <p className="text-sm text-slate-200 leading-relaxed flex-1">{t.task}</p>
+                  <p className="text-sm text-cc-text leading-relaxed flex-1">{t.task}</p>
                 </div>
                 {t.result && (
-                  <p className="text-xs text-slate-500 ml-14 leading-relaxed line-clamp-2">{t.result}</p>
+                  <p className="text-xs text-cc-muted ml-14 leading-relaxed line-clamp-2">{t.result}</p>
                 )}
-                <p className="text-xs text-slate-600 ml-14">{timeAgo(t.timestamp)}</p>
+                <p className="text-xs text-cc-subtle ml-14">{timeAgo(t.timestamp)}</p>
               </div>
             ))}
           </div>
@@ -160,9 +160,9 @@ export default function MemoryPage() {
               <EmptyState icon="🧭" message="No decisions recorded yet" />
             ) : filteredDecisions.map((d, i) => (
               <div key={i} className="panel p-3 space-y-1">
-                <p className="text-sm text-slate-200 font-medium">{d.decision}</p>
-                <p className="text-xs text-slate-400 leading-relaxed">{d.reason}</p>
-                <p className="text-xs text-slate-600">{timeAgo(d.timestamp)}</p>
+                <p className="text-sm text-cc-text font-medium">{d.decision}</p>
+                <p className="text-xs text-cc-muted leading-relaxed">{d.reason}</p>
+                <p className="text-xs text-cc-subtle">{timeAgo(d.timestamp)}</p>
               </div>
             ))}
           </div>
@@ -174,7 +174,7 @@ export default function MemoryPage() {
               <EmptyState icon="📝" message="No notes recorded yet" />
             ) : filteredNotes.map((note, i) => (
               <div key={i} className="panel p-3">
-                <p className="text-sm text-slate-300 leading-relaxed">{note}</p>
+                <p className="text-sm text-cc-text leading-relaxed">{note}</p>
               </div>
             ))}
           </div>
@@ -186,11 +186,11 @@ export default function MemoryPage() {
 
 function EmptyState({ icon, message }: { icon: string; message: string }) {
   return (
-    <div className="flex items-center justify-center py-16 text-slate-600">
+    <div className="flex items-center justify-center py-16 text-cc-subtle">
       <div className="text-center">
         <p className="text-3xl mb-2">{icon}</p>
         <p className="text-sm">{message}</p>
-        <p className="text-xs mt-1 text-slate-700">Run tasks to populate memory</p>
+        <p className="text-xs mt-1 text-cc-subtle/70">Run tasks to populate memory</p>
       </div>
     </div>
   )

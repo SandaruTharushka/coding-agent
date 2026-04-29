@@ -18,23 +18,23 @@ function FilePreview({ path, content, loading }: { path: string; content: string
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-shrink-0 px-4 py-2 border-b border-slate-700/50 flex items-center gap-3 bg-slate-900/50">
-        <span className="text-xs text-slate-400 mono truncate">{path}</span>
+      <div className="flex-shrink-0 px-4 py-2 border-b border-cc-border flex items-center gap-3 bg-cc-sidebar/50">
+        <span className="text-xs text-cc-muted mono truncate">{path}</span>
         <div className="flex-1" />
         <span className="badge badge-gray">{getLang(path)}</span>
-        <span className="text-xs text-slate-600">{lines.length} lines</span>
+        <span className="text-xs text-cc-subtle">{lines.length} lines</span>
       </div>
       <div className="flex-1 overflow-auto">
         {loading ? (
-          <div className="flex items-center justify-center h-32 text-slate-500 text-sm">
-            <span className="spin inline-block w-4 h-4 border border-slate-600 border-t-slate-300 rounded-full mr-2" />
+          <div className="flex items-center justify-center h-32 text-cc-muted text-sm">
+            <span className="spin inline-block w-4 h-4 border border-cc-border2 border-t-cc-muted rounded-full mr-2" />
             Loading…
           </div>
         ) : (
-          <pre className="text-xs mono p-4 leading-relaxed text-slate-300">
+          <pre className="text-xs mono p-4 leading-relaxed text-cc-muted">
             {lines.map((line, i) => (
               <div key={i} className="flex">
-                <span className="select-none text-slate-600 w-10 flex-shrink-0 text-right pr-4">
+                <span className="select-none text-cc-subtle w-10 flex-shrink-0 text-right pr-4">
                   {i + 1}
                 </span>
                 <span className="flex-1">{line}</span>
@@ -103,9 +103,9 @@ export default function ProjectPage() {
   return (
     <div className="flex h-full">
       {/* File tree sidebar */}
-      <div className="w-56 flex-shrink-0 border-r border-slate-700/50 flex flex-col">
-        <div className="flex-shrink-0 px-3 py-2.5 border-b border-slate-700/50 flex items-center gap-2">
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex-1">
+      <div className="w-56 flex-shrink-0 border-r border-cc-border flex flex-col">
+        <div className="flex-shrink-0 px-3 py-2.5 border-b border-cc-border flex items-center gap-2">
+          <span className="text-xs font-semibold text-cc-muted uppercase tracking-wider flex-1">
             Files
           </span>
           <button
@@ -148,11 +148,11 @@ export default function ProjectPage() {
             loading={contentLoading}
           />
         ) : (
-          <div className="flex items-center justify-center h-full text-slate-600">
+          <div className="flex items-center justify-center h-full text-cc-subtle">
             <div className="text-center">
               <p className="text-3xl mb-3">📁</p>
               <p className="text-sm">Select a file to preview</p>
-              <p className="text-xs mt-1 text-slate-700">Files are read-only — edits go through the agent</p>
+              <p className="text-xs mt-1 text-cc-subtle/70">Files are read-only — edits go through the agent</p>
             </div>
           </div>
         )}

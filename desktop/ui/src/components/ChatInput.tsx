@@ -35,7 +35,7 @@ export default function ChatInput({ onSend, disabled, placeholder }: Props) {
   }
 
   return (
-    <div className="p-3 border-t border-slate-700/50 bg-slate-900/50">
+    <div className="p-3 border-t border-cc-border bg-cc-sidebar/60">
       <div className="flex gap-2 items-end">
         <textarea
           ref={textareaRef}
@@ -47,11 +47,11 @@ export default function ChatInput({ onSend, disabled, placeholder }: Props) {
           placeholder={placeholder ?? 'Describe a coding task… (Enter to send, Shift+Enter for newline)'}
           rows={1}
           className={[
-            'flex-1 resize-none bg-slate-800 border border-slate-600 rounded-lg px-3 py-2.5',
-            'text-sm text-slate-200 placeholder-slate-500',
-            'focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30',
+            'flex-1 resize-none bg-cc-surface border border-cc-border2 rounded-lg px-3 py-2.5',
+            'text-sm text-cc-text placeholder-cc-subtle',
+            'focus:outline-none focus:border-cc-accent focus:ring-1 focus:ring-cc-accent/30',
             'transition-colors leading-relaxed min-h-[42px] max-h-[160px]',
-            disabled ? 'opacity-50 cursor-not-allowed' : '',
+            disabled ? 'opacity-40 cursor-not-allowed' : '',
           ].join(' ')}
         />
         <button
@@ -72,7 +72,7 @@ export default function ChatInput({ onSend, disabled, placeholder }: Props) {
           )}
         </button>
       </div>
-      <p className="text-xs text-slate-600 mt-1.5 px-1">
+      <p className="text-xs text-cc-subtle mt-1.5 px-1">
         Tasks run the full agent pipeline: Architect → Coder → Tester → Reviewer
       </p>
     </div>

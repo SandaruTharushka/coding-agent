@@ -67,8 +67,8 @@ export default function DiffPage() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex-shrink-0 px-4 py-3 border-b border-slate-700/50 flex items-center gap-3">
-        <h1 className="text-sm font-semibold text-slate-200">Diff Preview</h1>
+      <div className="flex-shrink-0 px-4 py-3 border-b border-cc-border flex items-center gap-3">
+        <h1 className="text-sm font-semibold text-cc-text">Diff Preview</h1>
         <div className="flex-1" />
         {changedFiles.length > 0 && (
           <span className="badge badge-yellow">{changedFiles.length} changed</span>
@@ -89,24 +89,24 @@ export default function DiffPage() {
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Changed files list */}
-        <div className="w-48 flex-shrink-0 border-r border-slate-700/50 flex flex-col">
-          <div className="px-3 py-2 border-b border-slate-700/50">
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Changed Files</p>
+        <div className="w-48 flex-shrink-0 border-r border-cc-border flex flex-col">
+          <div className="px-3 py-2 border-b border-cc-border">
+            <p className="text-xs font-semibold text-cc-muted uppercase tracking-wider">Changed Files</p>
           </div>
           <div className="flex-1 overflow-y-auto p-2">
             {changedFiles.length === 0 ? (
-              <p className="text-xs text-slate-600 italic p-1">No pending changes</p>
+              <p className="text-xs text-cc-subtle italic p-1">No pending changes</p>
             ) : (
               changedFiles.map((line, i) => {
                 const statusChar = line.slice(0, 2).trim()
                 const file = line.slice(3)
                 const color = statusChar === 'M' ? 'text-yellow-400' :
                               statusChar === 'A' || statusChar === '??' ? 'text-emerald-400' :
-                              statusChar === 'D' ? 'text-red-400' : 'text-slate-400'
+                              statusChar === 'D' ? 'text-red-400' : 'text-cc-muted'
                 return (
                   <div key={i} className="flex items-center gap-1.5 py-0.5 px-1">
                     <span className={`mono text-xs font-bold w-3 ${color}`}>{statusChar}</span>
-                    <span className="text-xs text-slate-300 truncate mono" title={file}>{file}</span>
+                    <span className="text-xs text-cc-text truncate mono" title={file}>{file}</span>
                   </div>
                 )
               })
@@ -114,7 +114,7 @@ export default function DiffPage() {
           </div>
 
           {/* Action buttons */}
-          <div className="border-t border-slate-700/50 p-2 space-y-1.5">
+          <div className="border-t border-cc-border p-2 space-y-1.5">
             <button
               onClick={handleApply}
               disabled={applying || changedFiles.length === 0}
@@ -139,15 +139,15 @@ export default function DiffPage() {
                 </>
               ) : '↩ Rollback'}
             </button>
-            <p className="text-xs text-slate-600 text-center">All edits go through Safe Edit System</p>
+            <p className="text-xs text-cc-subtle text-center">All edits go through Safe Edit System</p>
           </div>
         </div>
 
         {/* Diff content */}
         <div className="flex-1 min-w-0 overflow-hidden">
           {loading ? (
-            <div className="flex items-center justify-center h-full text-slate-500 text-sm">
-              <span className="spin inline-block w-4 h-4 border border-slate-600 border-t-slate-300 rounded-full mr-2" />
+            <div className="flex items-center justify-center h-full text-cc-muted text-sm">
+              <span className="spin inline-block w-4 h-4 border border-cc-border2 border-t-cc-muted rounded-full mr-2" />
               Loading diff…
             </div>
           ) : (
