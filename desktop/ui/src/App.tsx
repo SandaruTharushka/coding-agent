@@ -2,6 +2,8 @@ import { useEffect } from 'react'
 import { AppProvider, useApp } from './context/AppContext'
 import Sidebar from './components/Sidebar'
 import RightPanel from './components/RightPanel'
+import StatusBar from './components/StatusBar'
+import DashboardPage from './pages/DashboardPage'
 import ChatPage from './pages/ChatPage'
 import ProjectPage from './pages/ProjectPage'
 import DiffPage from './pages/DiffPage'
@@ -19,22 +21,31 @@ function AppShell() {
   }, [refreshGitStatus])
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-cc-bg text-cc-text">
-      {/* Left sidebar */}
-      <Sidebar />
+    <div
+      className="flex flex-col h-screen w-screen overflow-hidden"
+      style={{ background: 'linear-gradient(160deg, #0b0b0c 0%, #111111 60%, #0f0f11 100%)' }}
+    >
+      {/* Three-column body */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        <Sidebar />
 
-      {/* Main content */}
-      <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
-        {activePage === 'chat' && <ChatPage />}
-        {activePage === 'project' && <ProjectPage />}
-        {activePage === 'diff' && <DiffPage />}
-        {activePage === 'terminal' && <TerminalPage />}
-        {activePage === 'memory' && <MemoryPage />}
-        {activePage === 'settings' && <SettingsPage />}
-      </main>
+        <main className="flex-1 min-w-0 flex flex-col overflow-hidden relative">
+          <div className="flex-1 min-h-0 overflow-hidden fade-in">
+            {activePage === 'home'     && <DashboardPage />}
+            {activePage === 'chat'     && <ChatPage />}
+            {activePage === 'project'  && <ProjectPage />}
+            {activePage === 'diff'     && <DiffPage />}
+            {activePage === 'terminal' && <TerminalPage />}
+            {activePage === 'memory'   && <MemoryPage />}
+            {activePage === 'settings' && <SettingsPage />}
+          </div>
+        </main>
 
-      {/* Right panel */}
-      <RightPanel />
+        <RightPanel />
+      </div>
+
+      {/* Footer status bar — full width */}
+      <StatusBar />
     </div>
   )
 }

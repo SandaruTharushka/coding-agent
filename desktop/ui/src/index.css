@@ -3,139 +3,189 @@
 @tailwind utilities;
 
 @layer base {
-  * {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-  html, body, #root {
-    height: 100%;
-    width: 100%;
-    overflow: hidden;
-  }
+  html, body, #root { height: 100%; width: 100%; overflow: hidden; }
 
   body {
-    background-color: #0a0a0a;
-    color: #f0f0f0;
-    font-family: system-ui, -apple-system, sans-serif;
+    background-color: #0b0b0c;
+    color: #e6e6e6;
+    font-family: 'Inter', 'SF Pro Display', 'Segoe UI', system-ui, -apple-system, sans-serif;
     font-size: 14px;
+    line-height: 1.5;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
+  /* Scrollbars — minimal, appear on hover */
+  ::-webkit-scrollbar              { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track        { background: transparent; }
+  ::-webkit-scrollbar-thumb        { background: transparent; border-radius: 4px; transition: background 0.2s; }
+  *:hover::-webkit-scrollbar-thumb { background: #2a2a2e; }
+  ::-webkit-scrollbar-thumb:hover  { background: #3e3e44; }
 
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  ::-webkit-scrollbar-thumb {
-    background: #2a2a2a;
-    border-radius: 3px;
-  }
-
-  ::-webkit-scrollbar-thumb:hover {
-    background: #3a3a3a;
-  }
+  ::selection { background: rgba(255,106,61,0.22); color: #e6e6e6; }
 }
 
 @layer components {
-  .panel {
-    @apply bg-cc-surface border border-cc-border rounded-lg;
+
+  /* ── Glass panels ──────────────────────────────────────── */
+  .glass {
+    background: rgba(20,20,22,0.82);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(31,31,34,0.9);
   }
 
+  /* ── Session / PR cards ────────────────────────────────── */
+  .agent-card {
+    @apply rounded-card border border-cc-border bg-cc-bg3 cursor-pointer select-none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  }
+  .agent-card:hover {
+    border-color: #2a2a2e;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.40);
+    transform: translateY(-1px);
+  }
+
+  /* ── Sidebar nav items ─────────────────────────────────── */
+  .nav-item {
+    @apply flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left select-none cursor-pointer;
+    @apply text-cc-muted;
+    transition: background 0.18s ease, color 0.18s ease;
+  }
+  .nav-item:hover  { background: #1a1a1d; color: #e6e6e6; }
+  .nav-item.active { background: #1a1a1d; color: #ff6a3d; }
+
+  /* ── Buttons ───────────────────────────────────────────── */
   .btn {
-    @apply px-3 py-1.5 rounded text-sm font-medium transition-colors duration-150 cursor-pointer select-none;
+    @apply inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer select-none;
+    transition: background 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
   }
-
   .btn-primary {
-    @apply btn bg-cc-accent hover:bg-orange-500 text-white disabled:opacity-40 disabled:cursor-not-allowed;
+    @apply btn bg-cc-accent text-white;
   }
-
-  .btn-ghost {
-    @apply btn text-cc-muted hover:text-cc-text hover:bg-cc-surface2;
+  .btn-primary:hover:not(:disabled) {
+    background: #ff7849;
+    box-shadow: 0 0 18px rgba(255,106,61,0.30);
   }
+  .btn-primary:disabled { @apply opacity-40 cursor-not-allowed; }
 
-  .btn-danger {
-    @apply btn bg-red-950/50 hover:bg-red-900/60 text-cc-error border border-red-800/40;
-  }
+  .btn-ghost  { @apply btn text-cc-muted hover:text-cc-text hover:bg-cc-bg4; }
+  .btn-blue   { @apply btn bg-blue-600 hover:bg-blue-500 text-white; box-shadow: 0 0 14px rgba(59,130,246,0.22); }
+  .btn-danger { @apply btn bg-red-950/50 hover:bg-red-900/50 text-red-400 border border-red-800/35; }
 
-  .btn-success {
-    @apply btn bg-emerald-950/50 hover:bg-emerald-900/60 text-cc-success border border-emerald-800/40;
-  }
-
+  /* ── Inputs ────────────────────────────────────────────── */
   .input {
-    @apply w-full bg-cc-surface border border-cc-border2 rounded px-3 py-2 text-cc-text
-           placeholder-cc-subtle focus:outline-none focus:border-cc-accent focus:ring-1 focus:ring-cc-accent/30
-           text-sm transition-colors;
+    @apply w-full bg-cc-bg3 border border-cc-border rounded-lg px-3 py-2 text-cc-text placeholder-cc-subtle text-sm;
+    outline: none;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+  }
+  .input:focus {
+    border-color: rgba(255,106,61,0.55);
+    box-shadow: 0 0 0 3px rgba(255,106,61,0.10);
   }
 
-  .label {
-    @apply block text-xs font-medium text-cc-muted mb-1.5;
+  /* ── Badges ────────────────────────────────────────────── */
+  .badge        { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium; }
+  .badge-blue   { @apply badge bg-blue-500/10   text-blue-400   border border-blue-500/20;   }
+  .badge-green  { @apply badge bg-emerald-500/10 text-emerald-400 border border-emerald-500/20; }
+  .badge-orange { @apply badge bg-orange-500/10 text-orange-400 border border-orange-500/20; }
+  .badge-red    { @apply badge bg-red-500/10    text-red-400    border border-red-500/20;    }
+  .badge-yellow { @apply badge bg-yellow-500/10 text-yellow-400 border border-yellow-500/20; }
+  .badge-gray   { @apply badge bg-cc-bg4 text-cc-muted border border-cc-border2; }
+  .badge-purple { @apply badge bg-purple-500/10 text-purple-400 border border-purple-500/20; }
+
+  /* ── Monospace ─────────────────────────────────────────── */
+  .mono { font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace; }
+
+  /* ── Section labels ────────────────────────────────────── */
+  .section-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: #4a4a50;
   }
 
-  .badge {
-    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
-  }
+  /* ── Status dots ───────────────────────────────────────── */
+  .status-dot         { @apply w-2 h-2 rounded-full flex-shrink-0; }
+  .status-dot-idle    { @apply status-dot bg-cc-subtle; }
+  .status-dot-thinking{ @apply status-dot bg-amber-400; animation: statusPulse 1.6s ease-in-out infinite; }
+  .status-dot-executing{ @apply status-dot bg-blue-400; animation: statusPulse 0.75s ease-in-out infinite; }
+  .status-dot-complete{ @apply status-dot bg-emerald-400; }
+  .status-dot-error   { @apply status-dot bg-red-400; }
 
-  .badge-blue {
-    @apply badge bg-blue-500/15 text-blue-400 border border-blue-500/25;
-  }
-
-  .badge-green {
-    @apply badge bg-emerald-500/15 text-emerald-400 border border-emerald-500/25;
-  }
-
-  .badge-red {
-    @apply badge bg-red-500/15 text-red-400 border border-red-500/25;
-  }
-
-  .badge-yellow {
-    @apply badge bg-yellow-500/15 text-yellow-400 border border-yellow-500/25;
-  }
-
-  .badge-gray {
-    @apply badge bg-cc-surface2 text-cc-muted border border-cc-border2;
-  }
-
-  .mono {
-    font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
-  }
-
+  /* ── Execution log line ────────────────────────────────── */
   .log-line {
-    @apply mono text-xs leading-relaxed whitespace-pre-wrap break-all;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 11px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-break: break-all;
   }
 
-  .diff-add {
-    @apply bg-emerald-950/60 text-emerald-400 border-l-2 border-emerald-600;
+  /* ── Token / progress bars ─────────────────────────────── */
+  .progress-track { @apply rounded-full overflow-hidden; background: #1c1c1f; }
+  .progress-fill  { @apply rounded-full h-full; transition: width 0.5s ease; }
+  .token-bar-ok   { background: linear-gradient(90deg, #ff6a3d, #ff7849); }
+  .token-bar-warn { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+  .token-bar-crit { background: linear-gradient(90deg, #ef4444, #f87171); }
+
+  /* ── Chat input container glow ─────────────────────────── */
+  .chat-input-wrap {
+    border: 1px solid #2a2a2e;
+    border-radius: 16px;
+    background: #18181b;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .chat-input-wrap:focus-within {
+    border-color: rgba(255,106,61,0.45);
+    box-shadow: 0 0 0 2px rgba(255,106,61,0.12), 0 0 28px rgba(255,106,61,0.08);
   }
 
-  .diff-remove {
-    @apply bg-red-950/60 text-red-400 border-l-2 border-red-600;
-  }
+  /* ── Diff colors ───────────────────────────────────────── */
+  .diff-add    { @apply bg-emerald-950/60 text-emerald-400 border-l-2 border-emerald-600; }
+  .diff-remove { @apply bg-red-950/60    text-red-400    border-l-2 border-red-600; }
+  .diff-context{ @apply text-cc-subtle; }
 
-  .diff-context {
-    @apply text-cc-subtle;
-  }
+  /* ── Panel separator ───────────────────────────────────── */
+  .panel-divider { @apply border-t border-cc-border; }
 }
 
-.spin {
-  animation: spin 1s linear infinite;
-}
-
+/* ── Global keyframes ──────────────────────────────────────── */
 @keyframes spin {
-  from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
-
-.pulse-dot {
-  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+@keyframes statusPulse {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50%     { opacity: 0.30; transform: scale(0.68); }
+}
+@keyframes glowPulse {
+  0%,100% { box-shadow: 0 0 8px rgba(255,106,61,0.10); }
+  50%     { box-shadow: 0 0 28px rgba(255,106,61,0.35); }
+}
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(7px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes sparkle {
+  0%,100% { transform: scale(1) rotate(0deg); opacity: 1; }
+  33%     { transform: scale(1.38) rotate(18deg); opacity: 0.62; }
+  66%     { transform: scale(0.80) rotate(-10deg); opacity: 0.88; }
+}
+@keyframes thinkDot {
+  0%,100% { opacity: 0.2; }
+  50%     { opacity: 1; }
 }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
+/* ── Utility classes ────────────────────────────────────────── */
+.spin          { animation: spin 1s linear infinite; }
+.spin-slow     { animation: spin 2.5s linear infinite; }
+.pulse-dot     { animation: statusPulse 2s ease-in-out infinite; }
+.glow-pulse    { animation: glowPulse 2.2s ease-in-out infinite; }
+.fade-in       { animation: fadeSlideIn 0.22s ease; }
+.sparkle       { animation: sparkle 3.5s ease-in-out infinite; }
+.think-dot     { animation: thinkDot 1.2s ease-in-out infinite; }
+.think-dot-2   { animation: thinkDot 1.2s ease-in-out infinite 0.4s; }
+.think-dot-3   { animation: thinkDot 1.2s ease-in-out infinite 0.8s; }
