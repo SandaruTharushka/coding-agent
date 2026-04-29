@@ -1,12 +1,51 @@
-export type Page = 'chat' | 'project' | 'diff' | 'terminal' | 'memory' | 'settings'
+export type Page = 'home' | 'chat' | 'project' | 'diff' | 'terminal' | 'memory' | 'settings'
 
-export type AgentStatus = 'idle' | 'running' | 'complete' | 'error'
+export type AgentStatus = 'idle' | 'thinking' | 'executing' | 'complete' | 'error'
+// 'running' kept as alias in context for backwards compat with electron IPC
+
+export type ModelId = 'claude-sonnet-4-6' | 'claude-opus-4-7' | 'claude-haiku-4-5' | 'qwen-coder' | 'gpt-4o'
+
+export interface Model {
+  id: ModelId
+  name: string
+  shortName: string
+  provider: 'anthropic' | 'qwen' | 'openai'
+  color: string
+}
+
+export interface TokenUsage {
+  used: number
+  limit: number
+  inputTokens: number
+  outputTokens: number
+}
+
+export interface Session {
+  id: string
+  title: string
+  subtitle: string
+  status: 'active' | 'paused' | 'complete' | 'error'
+  time: string
+  repo: string
+  model: string
+}
+
+export interface PullRequest {
+  id: string
+  number: number
+  title: string
+  repo: string
+  branch: string
+  status: 'open' | 'in-review' | 'merged' | 'closed'
+  time: string
+}
 
 export interface LogEntry {
   id: string
-  type: 'log' | 'error' | 'system'
+  type: 'log' | 'error' | 'system' | 'tool'
   message: string
   timestamp: string
+  tool?: string
 }
 
 export interface ChatMessage {

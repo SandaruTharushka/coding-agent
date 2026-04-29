@@ -76,7 +76,7 @@ export default function TerminalPage() {
 
         <button
           onClick={handleVerify}
-          disabled={verifying || agentStatus === 'running'}
+          disabled={verifying || agentStatus === 'thinking' || agentStatus === 'executing'}
           className="btn-primary text-xs"
         >
           {verifying ? (

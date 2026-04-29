@@ -86,7 +86,7 @@ export default function ChatPage() {
   const [streamBuffer, setStreamBuffer] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
   const streamMsgIdRef = useRef<string | null>(null)
-  const isRunning = agentStatus === 'running'
+  const isRunning = agentStatus === 'thinking' || agentStatus === 'executing'
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -104,7 +104,7 @@ export default function ChatPage() {
     }
     setMessages((prev) => [...prev, userMsg])
     setCurrentTask(task)
-    setAgentStatus('running')
+    setAgentStatus('thinking')
 
     // Add streaming assistant placeholder
     const streamId = String(++msgId)
