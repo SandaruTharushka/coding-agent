@@ -4,14 +4,15 @@
   "private": true,
   "main": "dist-electron/main.js",
   "scripts": {
+    "ensure-root-deps": "node ./scripts/ensure-root-deps.cjs",
     "dev:vite": "cd ui && npx vite --port 5173",
     "dev:prepare": "tsc -p tsconfig.electron.json",
     "dev:electron": "npx wait-on tcp:5173 && cross-env NODE_ENV=development npx electron dist-electron/main.js",
-    "dev": "npm run dev:prepare && npx concurrently -k -n VITE,ELEC -c cyan,yellow \"npm run dev:vite\" \"npm run dev:electron\"",
+    "dev": "npm run ensure-root-deps && npm run dev:prepare && npx concurrently -k -n VITE,ELEC -c cyan,yellow \"npm run dev:vite\" \"npm run dev:electron\"",
     "build:electron": "tsc -p tsconfig.electron.json",
     "build:vite": "cd ui && npx vite build",
-    "build": "npm run build:electron && npm run build:vite",
-    "preview": "npm run build && npx electron dist-electron/main.js"
+    "build": "npm run ensure-root-deps && npm run build:electron && npm run build:vite",
+    "preview": "npm run build && cross-env NODE_ENV=production npx electron dist-electron/main.js"
   },
   "dependencies": {
     "electron": "^28.3.3"

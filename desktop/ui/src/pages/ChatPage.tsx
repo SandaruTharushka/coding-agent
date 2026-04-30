@@ -120,10 +120,37 @@ export default function ChatPage() {
     window.electronAPI.removeAllListeners('agent:progress')
     window.electronAPI.removeAllListeners('agent:complete')
 
+    let completed = false
+
+    const finalize = (success: boolean, summary: string, sessionId?: string) => {
+      if (completed) return
+      completed = true
+      setAgentStatus(success ? 'complete' : 'error')
+      setCurrentPhase('')
+      if (sessionId) setLastSessionId(sessionId)
+
+      setMessages((prev) =>
+        prev.map((m) => (m.id === streamId ? { ...m, isStreaming: false } : m)),
+      )
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: String(++msgId),
+          role: 'system',
+          content: summary,
+          timestamp: new Date().toISOString(),
+        },
+      ])
+      refreshGitStatus()
+      window.electronAPI.removeAllListeners('agent:progress')
+      window.electronAPI.removeAllListeners('agent:complete')
+    }
+
     window.electronAPI.onAgentProgress((data: ProgressEvent) => {
       const msg = data.message ?? ''
       const phase = detectPhase(msg)
       if (phase) setCurrentPhase(phase)
+      if (data.type === 'log') setAgentStatus('executing')
 
       addLog({ type: data.type === 'error' ? 'error' : 'log', message: msg, timestamp: data.timestamp })
 
@@ -138,42 +165,18 @@ export default function ChatPage() {
     })
 
     window.electronAPI.onAgentComplete((data: CompleteEvent) => {
-      const success = data.success
-      setAgentStatus(success ? 'complete' : 'error')
-      setCurrentPhase('')
-      setLastSessionId(data.sessionId)
-
-      // Finalize streaming message
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === streamId ? { ...m, isStreaming: false } : m,
-        ),
-      )
-
-      // Add completion summary
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: String(++msgId),
-          role: 'system',
-          content: success
-            ? '✓ Task completed successfully'
-            : `✗ Task failed (exit code: ${data.exitCode})`,
-          timestamp: new Date().toISOString(),
-        },
-      ])
-
-      refreshGitStatus()
+      const summary = data.success
+        ? '✓ Task completed successfully'
+        : `✗ Task failed (exit code: ${data.exitCode}). See terminal/log panel for details.`
+      finalize(data.success, summary, data.sessionId)
     })
 
     try {
       await window.electronAPI.runAgentTask(task)
     } catch (err) {
-      setAgentStatus('error')
-      setMessages((prev) => [
-        ...prev,
-        { id: String(++msgId), role: 'system', content: `Error: ${(err as Error).message}`, timestamp: new Date().toISOString() },
-      ])
+      // Hard failure invoking the IPC handler itself — never leave the UI stuck
+      // on "Running". Surface the underlying error.
+      finalize(false, `Error: ${(err as Error)?.message ?? String(err)}`)
     }
   }
 
