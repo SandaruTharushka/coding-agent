@@ -14,9 +14,13 @@
     "dev:repl": "tsx entrypoints/qwen-agent.ts",
     "lint": "tsc -p tsconfig.qwen.json --noEmit",
     "clean": "rm -rf dist",
+    "setup": "npm install && cd desktop && npm install",
+    "postinstall:desktop": "cd desktop && npm install",
+    "desktop": "cd desktop && npm run dev",
     "desktop:dev": "cd desktop && npm install && npm run dev",
     "desktop:build": "cd desktop && npm install && npm run build",
-    "desktop:preview": "cd desktop && npm install && npm run preview"
+    "desktop:preview": "cd desktop && npm install && npm run preview",
+    "verify": "npm run build && cd desktop && npm install && npm run build"
   },
   "dependencies": {
     "commander": "^12.1.0"
