@@ -86,11 +86,16 @@ const BLOCKED_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
     pattern: /Remove-Item\s+.*-Force.*-Recurse/i,
     reason: 'PowerShell recursive force delete',
   },
+  { pattern: /\bkill\s+-9\s+1\b/i, reason: 'Sends SIGKILL to PID 1 (init/systemd)' },
+  { pattern: /\bkill\s+-(?:KILL|9)\s+(?:0|-1)\b/i, reason: 'SIGKILL to all processes' },
+  { pattern: /\bpkill\s+-9\b/i, reason: 'SIGKILL to process group' },
+  { pattern: /\btruncate\s+-s\s+0\b/i, reason: 'Empties files destructively' },
+  { pattern: /\b>\s*\/dev\/(?!null\b)/i, reason: 'Redirect to device file (not /dev/null)' },
 ]
 
 // System directory paths that must not be targeted
 const SYSTEM_PATH_PATTERN =
-  /(?:^|[\s"'`(])\/(?:etc|usr|bin|sbin|lib|lib64|boot|sys|proc|dev)(?:\/|[\s"'`)]|$)/i
+  /(?:^|[\s"'`(])\/(?:etc|usr|bin|sbin|lib|lib64|boot|sys|proc|dev|home|root|var)(?:\/|[\s"'`)]|$)/i
 const WINDOWS_SYSTEM_PATH_PATTERN =
   /(?:^|[\s"'`(])C:\\(?:Windows|Program\s+Files|System32)/i
 // Home directory targeted for deletion
@@ -162,6 +167,8 @@ const APPROVAL_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
     pattern: /\bnpm\s+publish\b/i,
     reason: 'Publishes package to the npm registry',
   },
+  { pattern: /\bkill\b/i, reason: 'Sends signal to a process' },
+  { pattern: /\bpkill\b/i, reason: 'Sends signal to processes by name' },
 ]
 
 // Commands unconditionally allowed without approval
@@ -174,7 +181,6 @@ const SAFE_PATTERNS: RegExp[] = [
   /^\s*git\s+stash\s+list\b/i,
   /^\s*git\s+remote\s+-v\b/i,
   /^\s*(dir|ls)(\s|$)/i,
-  /^\s*(cat|type)\s+[^|;&`$]+$/i,
   /^\s*(node|npm|npx|pnpm|yarn|tsc|tsx|python3?|pip)\s+--version\b/i,
   /^\s*echo\s+/i,
   /^\s*pwd\b/i,
@@ -183,6 +189,19 @@ const SAFE_PATTERNS: RegExp[] = [
   /^\s*find\s+\.(\s|$)/i,
   /^\s*grep\b/i,
 ]
+
+/**
+ * Returns true when a `cat`/`type` command targets a project-relative path
+ * (not absolute, not home-relative, no `..` traversal).
+ */
+function isSafeCatCommand(cmd: string): boolean {
+  const m = /^\s*(?:cat|type)\s+([^|;&`$]+)$/i.exec(cmd)
+  if (!m) return false
+  const arg = m[1].trim().replace(/^["']|["']$/g, '')
+  if (arg.startsWith('/') || arg.startsWith('~')) return false
+  if (PATH_TRAVERSAL_PATTERN.test(arg)) return false
+  return true
+}
 
 /**
  * Returns true when the command must never execute regardless of approval.
@@ -203,6 +222,7 @@ export function blockCommand(command: string): boolean {
 export function requiresApproval(command: string): boolean {
   const cmd = command.trim()
   if (blockCommand(cmd)) return false
+  if (isSafeCatCommand(cmd)) return false
   if (SAFE_PATTERNS.some(p => p.test(cmd))) return false
   if (APPROVAL_PATTERNS.some(({ pattern }) => pattern.test(cmd))) return true
   // Unknown commands default to needing approval (conservative)
@@ -215,6 +235,7 @@ export function requiresApproval(command: string): boolean {
 export function classifyCommand(command: string): RiskLevel {
   const cmd = command.trim()
   if (blockCommand(cmd)) return RiskLevel.BLOCKED
+  if (isSafeCatCommand(cmd)) return RiskLevel.SAFE
   if (SAFE_PATTERNS.some(p => p.test(cmd))) return RiskLevel.SAFE
   if (APPROVAL_PATTERNS.some(({ pattern }) => pattern.test(cmd))) return RiskLevel.CAUTION
   // Unknown commands are CAUTION — not necessarily dangerous but unrecognised
@@ -242,7 +263,7 @@ export function explainRisk(command: string): string {
   }
 
   // Check safe allowlist
-  if (SAFE_PATTERNS.some(p => p.test(cmd))) {
+  if (isSafeCatCommand(cmd) || SAFE_PATTERNS.some(p => p.test(cmd))) {
     return 'SAFE — Command is on the approved read-only / build allowlist'
   }
 

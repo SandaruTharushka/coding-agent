@@ -1,5 +1,7 @@
 import * as fs from 'fs'
 import * as path from 'path'
+import { randomUUID } from 'crypto'
+import lockfile from 'proper-lockfile'
 import type { AgentMemory, Plan, ProjectContext } from '../types.js'
 
 const AGENT_DIR = '.agent'
@@ -17,6 +19,18 @@ function ensureAgentDir(): void {
   }
 }
 
+async function withMemoryLock<T>(fn: () => T): Promise<T> {
+  ensureAgentDir()
+  const lockTarget = MEMORY_FILE
+  if (!fs.existsSync(lockTarget)) fs.writeFileSync(lockTarget, '{}', 'utf8')
+  const release = await lockfile.lock(lockTarget, { retries: { retries: 5, minTimeout: 50 } })
+  try {
+    return fn()
+  } finally {
+    await release()
+  }
+}
+
 export function readMemory(): AgentMemory {
   ensureAgentDir()
   if (!fs.existsSync(MEMORY_FILE)) {
@@ -28,7 +42,25 @@ export function readMemory(): AgentMemory {
       decisions: [],
     }
   }
-  return JSON.parse(fs.readFileSync(MEMORY_FILE, 'utf8')) as AgentMemory
+  const raw = fs.readFileSync(MEMORY_FILE, 'utf8')
+  try {
+    const parsed = JSON.parse(raw) as Partial<AgentMemory>
+    return {
+      projectRoot: parsed.projectRoot ?? process.cwd(),
+      projectSummary: parsed.projectSummary ?? '',
+      tasks: parsed.tasks ?? [],
+      notes: parsed.notes ?? [],
+      decisions: parsed.decisions ?? [],
+    }
+  } catch {
+    return {
+      projectRoot: process.cwd(),
+      projectSummary: '',
+      tasks: [],
+      notes: [],
+      decisions: [],
+    }
+  }
 }
 
 export function writeMemory(memory: AgentMemory): void {
@@ -53,39 +85,52 @@ export function readContext(): ProjectContext | null {
 
 export function writeContext(context: ProjectContext): void {
   ensureAgentDir()
-  // Strip file contents from stored context (too large), keep metadata
-  const stored = { ...context, files: context.files.map(f => ({ ...f })) }
-  fs.writeFileSync(CONTEXT_FILE, JSON.stringify(stored, null, 2), 'utf8')
+  fs.writeFileSync(CONTEXT_FILE, JSON.stringify(context, null, 2), 'utf8')
 }
 
-export function addTask(task: string, status: AgentMemory['tasks'][number]['status']): void {
-  const memory = readMemory()
-  memory.tasks.push({ task, status, timestamp: new Date().toISOString() })
-  writeMemory(memory)
-}
-
-export function updateTaskStatus(
+export async function addTask(
   task: string,
   status: AgentMemory['tasks'][number]['status'],
+): Promise<string> {
+  return withMemoryLock(() => {
+    const id = randomUUID()
+    const memory = readMemory()
+    memory.tasks.push({ id, task, status, timestamp: new Date().toISOString() })
+    writeMemory(memory)
+    return id
+  })
+}
+
+export async function updateTaskStatus(
+  taskOrId: string,
+  status: AgentMemory['tasks'][number]['status'],
   result?: string,
-): void {
-  const memory = readMemory()
-  const entry = [...memory.tasks].reverse().find(t => t.task === task)
-  if (entry) {
-    entry.status = status
-    if (result) entry.result = result.slice(0, 500)
-  }
-  writeMemory(memory)
+): Promise<void> {
+  return withMemoryLock(() => {
+    const memory = readMemory()
+    const entry =
+      memory.tasks.find(t => t.id === taskOrId) ??
+      [...memory.tasks].reverse().find(t => t.task === taskOrId)
+    if (entry) {
+      entry.status = status
+      if (result) entry.result = result.slice(0, 500)
+    }
+    writeMemory(memory)
+  })
 }
 
-export function addNote(note: string): void {
-  const memory = readMemory()
-  memory.notes.push(note)
-  writeMemory(memory)
+export async function addNote(note: string): Promise<void> {
+  return withMemoryLock(() => {
+    const memory = readMemory()
+    memory.notes.push(note)
+    writeMemory(memory)
+  })
 }
 
-export function addDecision(decision: string, reason: string): void {
-  const memory = readMemory()
-  memory.decisions.push({ decision, reason, timestamp: new Date().toISOString() })
-  writeMemory(memory)
+export async function addDecision(decision: string, reason: string): Promise<void> {
+  return withMemoryLock(() => {
+    const memory = readMemory()
+    memory.decisions.push({ decision, reason, timestamp: new Date().toISOString() })
+    writeMemory(memory)
+  })
 }

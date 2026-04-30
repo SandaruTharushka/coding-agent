@@ -1,9 +1,19 @@
 #!/usr/bin/env node
 import { Command } from 'commander'
-import { loadDotEnv } from '../src/config/qwenConfig.js'
+import { loadDotEnv, loadQwenConfig, validateQwenConfig } from '../src/config/qwenConfig.js'
 
 // Load .env before any command runs (shell env always takes priority)
 loadDotEnv('.env')
+
+// Non-blocking warning on startup if API key is missing
+const _cfg = loadQwenConfig()
+const _validation = validateQwenConfig(_cfg)
+if (!_validation.valid) {
+  const isMissingKey = _validation.errors.some(e => e.includes('QWEN_API_KEY'))
+  if (isMissingKey) {
+    console.warn('\x1b[33m⚠ QWEN_API_KEY not set.\x1b[0m Run: qwen-agent config set-key')
+  }
+}
 
 import { initCommand } from './commands/init.js'
 import { scanCommand } from './commands/scan.js'

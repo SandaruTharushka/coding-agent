@@ -225,7 +225,13 @@ export async function runAgent(
           type: 'function' as const,
           function: { name: tc.name, arguments: tc.args },
         }))
-      } catch {
+      } catch (streamErr) {
+        if (!options.silent) {
+          console.error(
+            '\x1b[33m[agent]\x1b[0m Stream failed, falling back to non-streaming:',
+            streamErr instanceof Error ? streamErr.message : String(streamErr),
+          )
+        }
         const resp = await qwenChatCompletion({ messages: allMessages, tools, tool_choice: 'auto' })
         const msg = resp.choices[0]?.message
         assistantContent = msg?.content ?? ''
@@ -252,8 +258,16 @@ export async function runAgent(
       let args: Record<string, unknown>
       try {
         args = JSON.parse(call.function.arguments)
-      } catch {
-        args = {}
+      } catch (parseErr) {
+        const errMsg = `Malformed JSON arguments for tool "${call.function.name}": ${parseErr instanceof Error ? parseErr.message : String(parseErr)}. Raw: ${call.function.arguments.slice(0, 200)}`
+        if (!options.silent) console.warn('\x1b[33m[agent]\x1b[0m', errMsg)
+        allMessages.push({
+          role: 'tool',
+          content: errMsg,
+          tool_call_id: call.id,
+          name: call.function.name,
+        })
+        continue
       }
 
       if (!options.silent) {
