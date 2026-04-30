@@ -1,5 +1,6 @@
 import * as fs from 'fs'
 import * as path from 'path'
+import { tmpdir } from 'os'
 import { execSync } from 'child_process'
 import type { Plan, PatchResult } from '../types.js'
 import { writeFile } from '../tools/file.tools.js'
@@ -68,7 +69,7 @@ export function generateDiff(filePath: string, newContent: string): string {
         .join('\n')
     )
   }
-  const tmp = `/tmp/agent_diff_${Date.now()}.tmp`
+  const tmp = path.join(tmpdir(), `agent_diff_${Date.now()}.tmp`)
   try {
     fs.writeFileSync(tmp, newContent, 'utf8')
     return execSync(`diff -u "${abs}" "${tmp}" || true`, { encoding: 'utf8', timeout: 10_000 })

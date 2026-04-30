@@ -16,6 +16,7 @@ export interface AgentMemory {
   projectRoot: string
   projectSummary: string
   tasks: Array<{
+    id: string
     task: string
     status: 'pending' | 'in_progress' | 'completed' | 'failed'
     timestamp: string
